@@ -2,7 +2,6 @@
 title: "Simulation Analysis"
 author: "Visruth Srimath Kandali"
 format: html
-editor: visual
 ---
 
 ## Set Up
