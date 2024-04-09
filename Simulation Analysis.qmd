@@ -9,13 +9,11 @@ editor: visual
 
 ```{r}
 #| label: setup
-#| results: hide
 library(ggplot2)
-library(moments)
 set.seed(2626)
 # TODO: change back to 100k
 r <- 10000 # number of repetitions
-# sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 2000, 3000, 4000)
+# sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
 sample_sizes <- c(5, 10, 20)
 ```
 
@@ -23,17 +21,18 @@ We are opting to create 100,000 samples (repetitions) to create the sampling dis
 
 ```{r}
 analysis <- function(f, distro, n, ...) {
-  hist(distro(n))
+  hist(distro(n), main = paste("Example Sample Distribution, n = ",n))
   sample_means <- replicate(r, f(distro(n, ...)))
-  hist(sample_means)
+  hist(sample_means, main = "Sampling Distribution")
   qqnorm(sample_means)
   qqline(sample_means)
 
-  skewness(sample_means)
+  moments::skewness(sample_means)
 }
 
-lapply(sample_sizes, analysis, distro = rlnorm, f = mean, mu = 0, sigma = 1)
-lapply(sample_sizes, analysis, distro = rlnorm, f = mean, mu = 0, sigma = 0.5)
+unlist(lapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 1))
+unlist(lapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 0.5))
+unlist(lapply(sample_sizes, analysis, distro = rnorm, f = mean))
 ```
 
 Distributions:
