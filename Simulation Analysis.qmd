@@ -1,0 +1,51 @@
+---
+title: "Simulation Analysis"
+author: "Visruth Srimath Kandali"
+format: html
+editor: visual
+---
+
+## Set Up
+
+```{r}
+#| label: setup
+#| results: hide
+library(ggplot2)
+library(moments)
+set.seed(2626)
+# TODO: change back to 100k
+r <- 10000 # number of repetitions
+# sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 2000, 3000, 4000)
+sample_sizes <- c(5, 10, 20)
+```
+
+We are opting to create 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
+
+```{r}
+analysis <- function(f, distro, n, ...) {
+  hist(distro(n))
+  sample_means <- replicate(r, f(distro(n, ...)))
+  hist(sample_means)
+  qqnorm(sample_means)
+  qqline(sample_means)
+
+  skewness(sample_means)
+}
+
+lapply(sample_sizes, analysis, distro = rlnorm, f = mean, mu = 0, sigma = 1)
+lapply(sample_sizes, analysis, distro = rlnorm, f = mean, mu = 0, sigma = 0.5)
+```
+
+Distributions:
+
+-   Just use Pearson?
+
+-   Use log normal and adjust sigma for skewness level?
+
+-   Exponential
+
+-   Normal
+
+-   Chi Square
+
+-   Uniform
