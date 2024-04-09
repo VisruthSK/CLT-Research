@@ -1,5 +1,5 @@
 ---
-title: "Simulation Analysis"
+title: "Simulation-Analysis"
 author: "Visruth Srimath Kandali"
 format: html
 ---
@@ -25,13 +25,14 @@ analysis <- function(f, distro, n, ...) {
   hist(sample_means, main = "Sampling Distribution")
   qqnorm(sample_means)
   qqline(sample_means)
-
   moments::skewness(sample_means)
 }
 
-unlist(lapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 1))
-unlist(lapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 0.5))
-unlist(lapply(sample_sizes, analysis, distro = rnorm, f = mean))
+print((exp(1^2) + 2) * sqrt(exp(1^2)-1))
+sapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 1)
+sapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 0.5)
+sapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 0.25)
+sapply(sample_sizes, analysis, distro = rnorm, f = mean)
 ```
 
 Distributions:
