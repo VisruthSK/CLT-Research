@@ -20,16 +20,30 @@ We are opting to create 100,000 samples (repetitions) to create the sampling dis
 
 ```{r}
 analysis <- function(statistic, distro, ...) {
-  # TODO distro not accepting the "..." parameters
-  sample_means <- replicate(r, statistic(distro(n, ...)))
-  # hist(distro(n, ...), main = paste("Example Sample Distribution, n = ", n))
-  # hist(sample_means, main = "Sampling Distribution")
-  # qqnorm(sample_means)
-  # qqline(sample_means)
-  moments::skewness(sample_means)
+  statistic(distro(...))
+
+  # # TODO distro not accepting the "..." parameters
+  # sample_means <- replicate(r, statistic(distro(...)))
+  # # hist(distro(n, ...), main = paste("Example Sample Distribution, n = ", n))
+  # # hist(sample_means, main = "Sampling Distribution")
+  # # qqnorm(sample_means)
+  # # qqline(sample_means)
+  # moments::skewness(sample_means)
 }
 ```
 An extensible function that generates sampling distributions given a population function to sample from, inferred parameters for that population, and a sampling distribution to plot and calculate skewness of.
+
+```{r}
+set.seed(0)
+e <- mean(rlnorm(20, 10, 0.25))
+set.seed(0)
+a <- analysis(mean, rlnorm, n = 20, meanlog = 10, sdlog = 0.25)
+
+print(e)
+print(a)
+identical(e, a)
+```
+
 
 ```{r}
 set.seed(0)
