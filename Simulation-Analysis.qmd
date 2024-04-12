@@ -19,20 +19,31 @@ sample_sizes <- c(5, 10, 20)
 We are opting to create 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
 
 ```{r}
-analysis <- function(f, distro, n, ...) {
-  hist(distro(n), main = paste("Example Sample Distribution, n = ",n))
-  sample_means <- replicate(r, f(distro(n, ...)))
-  hist(sample_means, main = "Sampling Distribution")
-  qqnorm(sample_means)
-  qqline(sample_means)
+analysis <- function(statistic, distro, ...) {
+  # TODO distro not accepting the "..." parameters
+  sample_means <- replicate(r, statistic(distro(n, ...)))
+  # hist(distro(n, ...), main = paste("Example Sample Distribution, n = ", n))
+  # hist(sample_means, main = "Sampling Distribution")
+  # qqnorm(sample_means)
+  # qqline(sample_means)
   moments::skewness(sample_means)
 }
+```
+An extensible function that generates sampling distributions given a population function to sample from, inferred parameters for that population, and a sampling distribution to plot and calculate skewness of.
 
-print((exp(1^2) + 2) * sqrt(exp(1^2)-1))
-sapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 1)
-sapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 0.5)
-sapply(sample_sizes, analysis, f = mean, distro = rlnorm, mu = 0, sigma = 0.25)
-sapply(sample_sizes, analysis, distro = rnorm, f = mean)
+```{r}
+set.seed(0)
+moments::skewness(replicate(r, mean(rlnorm(20, 0, 0.25))))
+set.seed(0)
+analysis(mean, rlnorm, n = 20, meanlog = 0, sdlog = 0.25)
+```
+
+
+```{r}
+sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1)
+sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5)
+sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25)
+sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
 ```
 
 Distributions:
