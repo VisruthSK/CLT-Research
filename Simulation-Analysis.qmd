@@ -6,14 +6,14 @@ format: html
 
 ## Set Up
 
-```{r}
-#| label: setup
+```{r setup}
 library(ggplot2)
-set.seed(2626)
+set.seed(0)
 # TODO: change back to 100k
 r <- 10000 # number of repetitions
-# sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
 sample_sizes <- c(5, 10, 20)
+sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
+
 ```
 
 We are opting to create 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
@@ -24,13 +24,20 @@ analysis <- function(statistic, distro, n, ...) {
   sapply(1:r, function(i) {
     sample_means[i] <<- statistic(distro(n, ...))
   })
-
-  hist(distro(n, ...), main = paste("Example Sample Distribution, n = ", n))
-  hist(sample_means, main = "Sampling Distribution")
-  qqnorm(sample_means)
-  qqline(sample_means)
   
-  moments::skewness(sample_means)
+  s <- sd(sample_means)
+  m <- mean(sample_means)
+  skewness <- moments::skewness(sample_means)
+  
+  upper <- sum(sample_means >= m + 1.96 * s)/r
+  lower <- sum(sample_means <= m - 1.96 * s)/r
+
+  # hist(distro(n, ...), main = paste("Example Sample Distribution, n = ", n))
+  # hist(sample_means, main = "Sampling Distribution")
+  # qqnorm(sample_means)
+  # qqline(sample_means)
+
+  upper-lower
 }
 ```
 An extensible function that generates sampling distributions given a population function to sample from, inferred parameters for that population, and a sampling distribution to plot and calculate skewness of.
@@ -40,14 +47,21 @@ set.seed(0)
 expected <- moments::skewness(replicate(r, mean(rlnorm(20, 0, 0.25))))
 set.seed(0)
 actual <- analysis(mean, rlnorm, n = 20, meanlog = 0, sdlog = 0.25)
+expected - actual
 ```
-Simple example to show that this function works.
+Simple example to show that this function works. FUNCTION NEEDS TO OUTPUT SKEWNESS.
 
 ```{r}
-sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1)
-sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5)
-sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25)
+sigma <- 1
+skew <- (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
+print(skew)
+sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = sigma)
+# sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5)
+# sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25)
 sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
+
+# Do T statistic and compare to t distribution
+# Try exponential and bimodal distributions
 ```
 
 Distributions:
