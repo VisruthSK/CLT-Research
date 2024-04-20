@@ -11,14 +11,15 @@ library(ggplot2)
 set.seed(0)
 # TODO: change back to 100k
 r <- 10000 # number of repetitions
-# sample_sizes <- c(5, 10, 20)
-sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
+sample_sizes <- c(5, 10, 20)
+# sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
 ```
 
 We are opting to create 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
 
 ```{r}
 analysis <- function(statistic, distro, n, ...) {
+  set.seed(0)
   sample_statistics <- numeric(r)
   sapply(1:r, function(i) {
     sample_statistics[i] <<- statistic(distro(n, ...))
@@ -51,7 +52,7 @@ expected - actual
 Simple example to show that this function works. FUNCTION NEEDS TO OUTPUT SKEWNESS.
 
 ```{r}
-sigma <- 1
+# sigma <- 1
 # skew <- (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
 # print(skew)
 # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1) # skewness 6.18
@@ -70,6 +71,7 @@ df <- rbind(
 )
 colnames(df) <- sample_sizes
 rownames(df) <- c("Log Normal (gamma = 6.18)", "Exponential (gamma = 2)", "Log Normal (gamma = 1.75)", "Normal (gamma = 0)")
+
 df
 ```
 
