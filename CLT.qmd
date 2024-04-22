@@ -7,21 +7,20 @@ format: html
 ## Set Up
 
 ```{r setup}
-library(ggplot2)
-set.seed(0)
 # TODO: change back to 100k
 r <- 100000 # number of repetitions
-sample_sizes <- c(5, 10, 20)
-# sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
+# sample_sizes <- c(5, 10, 20)
+sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000)
 ```
 
-We are opting to create 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
+We are opting to draw 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
 
 ```{r}
 analysis <- function(statistic, distro, n, ...) {
   set.seed(0)
+
   sample_statistics <- numeric(r)
-  parallel::mclapply(1:r, function(i) {
+  sapply(1:r, function(i) {
     sample_statistics[i] <<- statistic(distro(n, ...))
   })
 
@@ -40,7 +39,7 @@ analysis <- function(statistic, distro, n, ...) {
   upper - lower
 }
 ```
-An extensible function that generates sampling distributions given a population function to sample from, inferred parameters for that population, and a sampling distribution to plot and calculate skewness of.
+An extensible function that generates sampling distributions given a population function to sample from, inferred parameters for that population.
 
 ```{r}
 set.seed(0)
@@ -52,9 +51,9 @@ expected - actual
 Simple example to show that this function works. FUNCTION NEEDS TO OUTPUT SKEWNESS.
 
 ```{r}
-# sigma <- 1
-# skew <- (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
-# print(skew)
+lnormskew <- function(sigma) (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
+betaskew <- function(a, b) (2 * (b - a) * sqrt(a + b + 1)) / ((a + b + 2) * sqrt(a * b))
+
 # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1) # skewness 6.18
 # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5)
 # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25)
@@ -64,17 +63,21 @@ Simple example to show that this function works. FUNCTION NEEDS TO OUTPUT SKEWNE
 # Do T statistic and compare to t distribution
 # Try exponential and bimodal distributions
 df <- data.frame(
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rexp),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
-  
+  # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1),
+  # sapply(sample_sizes, analysis, statistic = mean, distro = rexp),
+  # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5),
+  # sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25),
+  sapply(sample_sizes, analysis, statistic = mean, distro = rbeta, shape1 = 0.3, shape2 = 0.2)
+  # sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
 )
+
+# TODO Look at Poission to see how nonnormality scales with skewness
+# lambda: 1,2,4,8,26
 
 df <- t(df)
 
 colnames(df) <- sample_sizes
-rownames(df) <- c("Log Normal (gamma = 6.18)", "Exponential (gamma = 2)", "Log Normal (gamma = 1.75)", "Normal (gamma = 0)")
+rownames(df) <- c("Log Normal (gamma = 6.1849)", "Exponential (gamma = 2)", "Log Normal (gamma = 1.7502)", "Log Normal (gamma = 0.7783)", "Beta (gamma = -0.4)", "Normal (gamma = 0)")
 
 df
 ```
