@@ -17,6 +17,7 @@ We are opting to draw 100,000 samples (repetitions) to create the sampling distr
 
 ```{r}
 analysis <- function(statistic, distro, n, ...) {
+  # TODO profile and optimize
   set.seed(0)
 
   sample_statistics <- numeric(r)
