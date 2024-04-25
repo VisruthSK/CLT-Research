@@ -48,30 +48,4 @@ using BenchmarkTools
     end
 end
 
-
-df_wide = unstack(results, :Sample_Size, :Distribution, :Tail_Difference)
-
-results = combine(groupby(results, :Sample_Size), :Tail_Difference => (x -> mean(x)) => :Mean_Tail_Difference)
-
-# Optionally, rename the columns to include the distribution names
-rename!(results, Symbol("$(unique(results.Distribution))") .=> :Mean_Tail_Difference)
-
 display(results)
-
-# for (distro, params) in distributions
-#     for n in sample_sizes
-#         println("n = $n: $(analysis(mean, distro, n, params...))")
-#     end
-# end
-
-# df <- data.frame(
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1.4865),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rpois, lambda = 0.001),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rgamma, shape = 0.02),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rexp),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rbeta, shape1 = 0.3, shape2 = 0.2),
-#   sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
-# )
