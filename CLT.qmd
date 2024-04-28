@@ -4,104 +4,76 @@ author: "Visruth Srimath Kandali"
 format: html
 ---
 
-## Set Up
+## Creating the Data
+
+```{julia}
+#| output: false
+using Distributions, Random, DataFrames, CSV
+
+function analysis(statistic, distro, n, r, params...)
+    Random.seed!(0)
+    d = distro(params...)
+
+    sample_statistics = zeros(r)
+    Threads.@threads for i in 1:r
+        sample_statistics[i] = statistic(rand(d, n))
+    end
+
+    m = mean(sample_statistics)
+    s = std(sample_statistics)
+
+    upper = sum(sample_statistics .>= m + 1.96 * s) / r
+    lower = sum(sample_statistics .<= m - 1.96 * s) / r
+
+    (upper, lower, upper + lower, upper - lower)
+end
+```
+
+This function creates a sampling distribution, using the given distribution and its parameters. It does this `r` times to mitigate any concerns of natural sampling variability. The function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed. The function then returns the tail weights along with their sum and difference. If this sampling distribution was approximately Gaussian, we would always expect tail weights of roughly 0.025, a sum of 0.05, and a difference of 0.
+
+```{julia}
+#| output: false
+function analyze_distributions(r)
+    println("Analyzing distributions with $(r) repetitions")
+
+    sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
+    distributions = [
+        (LogNormal, [0, 1.4865], 31.65266),
+        (Poisson, [0.001], 31.6228),
+        (Gamma, [0.02], 20),
+        (LogNormal, [0, 1], 6.1849),
+        (Exponential, [], 2),
+        (LogNormal, [0, 0.5], 1.7502),
+        (LogNormal, [0, 0.25], 0.7883),
+        (Beta, [0.3, 0.2], -0.4),
+        (Normal, [], 0)
+    ]
+    results = DataFrame(Distribution=String[], Params=Vector[], Skewness=Float64[], Sample_Size=Int[], Upper_Tail=Float64[], Lower_Tail=Float64[], Tail_Sum=Float64[], Tail_Difference=Float64[])
+
+    for (distro, params, skewness) in distributions
+        println("$(distro) with parameters $(params)")
+        for n in sample_sizes
+            upper, lower, tail_sum, tail_diff = analysis(mean, distro, n, r, params...)
+            push!(results, (string(distro), params, skewness, n, upper, lower, tail_sum, tail_diff))
+        end
+    end
+
+    results
+end
+
+analyze_distributions(1) # compile
+results = analyze_distributions(100000)
+CSV.write("CLT.csv", results)
+```
+
+We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`.
+
+## Graphing Results
 
 ```{r setup}
-# TODO: change back to 100k
-r <- 100000 # number of repetitions
-# sample_sizes <- c(5, 10, 20)
-sample_sizes <- c(5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000)
+library(tidyverse)
+df <- read.csv("CLT.csv")
 ```
-
-We are opting to draw 100,000 samples (repetitions) to create the sampling distribution so as to mitigate any concerns of random variability influencing our conclusions.
-
-```{r}
-analysis <- function(statistic, distro, n, ...) {
-  # TODO profile and optimize
-  set.seed(0)
-
-  sample_statistics <- numeric(r)
-  sapply(1:r, function(i) {
-    sample_statistics[i] <<- statistic(distro(n, ...))
-  })
-
-  s <- sd(sample_statistics)
-  m <- mean(sample_statistics)
-  skewness <- moments::skewness(sample_statistics)
-
-  upper <- sum(sample_statistics >= m + 1.96 * s) / r
-  lower <- sum(sample_statistics <= m - 1.96 * s) / r
-
-  # hist(distro(n, ...), main = paste("Example Sample Distribution, n = ", n))
-  # hist(sample_means, main = "Sampling Distribution")
-  # qqnorm(sample_means)
-  # qqline(sample_means)
-
-  upper - lower
-}
-```
-
-An extensible function that generates sampling distributions given a population function to sample from, inferred parameters for that population.
-
-```{r}
-set.seed(0)
-expected <- moments::skewness(replicate(r, mean(rlnorm(20, 0, 0.25))))
-set.seed(0)
-actual <- analysis(mean, rlnorm, n = 20, meanlog = 0, sdlog = 0.25)
-expected - actual
-```
-
-Simple example to show that this function works. FUNCTION NEEDS TO OUTPUT SKEWNESS.
-
-```{r}
-lnormskew <- function(sigma) (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
-betaskew <- function(a, b) (2 * (b - a) * sqrt(a + b + 1)) / ((a + b + 2) * sqrt(a * b))
-```
-
-Some functions to calculate skewness of a few distributions.
-
-```{r}
-# Do T statistic and compare to t distribution
-df <- data.frame(
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1.4865),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rpois, lambda = 0.001),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rgamma, shape = 0.02),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 1),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rexp),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.5),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlnorm, meanlog = 0, sdlog = 0.25),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rbeta, shape1 = 0.3, shape2 = 0.2),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
-)
-
-df <- t(df)
-
-colnames(df) <- sample_sizes
-# rownames(df) <- c("Log Normal (gamma1 = 31.65266)", "Poisson (gamma1 = 31.6228)")
-rownames(df) <- c("Log Normal (gamma1 = 31.65266)", "Poisson (gamma1 = 31.6228)", "Gamma (gamma1 = 20)", "Log Normal (gamma1 = 6.1849)", "Exponential (gamma1 = 2)", "Log Normal (gamma1 = 1.7502)", "Log Normal (gamma1 = 0.7783)", "Beta (gamma1 = -0.4)", "Normal (gamma1 = 0)")
-
-df
-```
-
-Observing the effects of skewness
-
-```{r}
-df <- data.frame(
-  sapply(sample_sizes, analysis, statistic = mean, distro = rlogis),
-  sapply(sample_sizes, analysis, statistic = mean, distro = runif),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rt, df = 4),
-  sapply(sample_sizes, analysis, statistic = mean, distro = rnorm)
-)
-
-df <- t(df)
-
-colnames(df) <- sample_sizes
-rownames(df) <- c("Logistic (beta2 = 6/5)", "t (beta2 = inf)", "Normal (beta2 = 0)")
-
-df
-```
-
-Looking at effects of Kurtosis--three distributions with 0 skewness but differing kurtosis.
 
 Distributions:
 
