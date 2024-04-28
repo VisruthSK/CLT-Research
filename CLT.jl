@@ -1,32 +1,6 @@
 using Distributions, Random, DataFrames, TidierPlots
 
-# TODO Change to 100k
-const r::Number = 1000
 const sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
-
-function analysis(statistic, distro, n, params...)
-    Random.seed!(0)
-    d = distro(params...)
-
-    sample_statistics = zeros(r)
-
-    # sample_statistics = pmap(x -> statistic(rand(d, n)), 1:r)
-
-    # sample_statistics = [statistic(rand(d, n)) for i in 1:r]
-
-    Threads.@threads for i in 1:r
-        sample_statistics[i] = statistic(rand(d, n))
-    end
-
-    s = std(sample_statistics)
-    m = mean(sample_statistics)
-
-    upper = sum(sample_statistics .>= m + 1.96 * s) / r
-    lower = sum(sample_statistics .<= m - 1.96 * s) / r
-
-    (upper, lower, upper + lower, upper - lower)
-end
-
 const distributions = [
     (LogNormal, [0, 1.4865], 31.65266),
     (Poisson, [0.001], 31.6228),
@@ -39,9 +13,48 @@ const distributions = [
     (Normal, [], 0)
 ]
 
+function analysis(statistic, distro, n, r, params...)
+    Random.seed!(0)
+    d = distro(params...)
+
+    sample_statistics = zeros(r)
+
+    # sample_statistics = pmap(x -> statistic(rand(d, n)), 1:r)
+
+    sample_statistics = [statistic(rand(d, n)) for i in 1:r]
+
+    # Threads.@threads for i in 1:r
+    #     sample_statistics[i] = statistic(rand(d, n))
+    # end
+
+    s = std(sample_statistics)
+    m = mean(sample_statistics)
+
+    upper = sum(sample_statistics .>= m + 1.96 * s) / r
+    lower = sum(sample_statistics .<= m - 1.96 * s) / r
+
+    (upper, lower, upper + lower, upper - lower)
+end
+
+function analyze_distributions(r)
+    results = DataFrame(Distribution=String[], Params=Vector[], Skewness=Float64[], Sample_Size=Int[], Upper_Tail=Float64[], Lower_Tail=Float64[], Tail_Sum=Float64[], Tail_Difference=Float64[])
+
+    for (distro, params, skewness) in distributions
+        println("$(distro) with parameters $(params)")
+        for n in sample_sizes
+            upper, lower, tail_sum, tail_diff = analysis(mean, distro, n, r, params...)
+            push!(results, (string(distro), params, skewness, n, upper, lower, tail_sum, tail_diff))
+        end
+    end
+
+    results
+end
+
+analyze_distributions(1)
+@profview analyze_distributions(10000)
+
 results = DataFrame(Distribution=String[], Params=Vector[], Skewness=Float64[], Sample_Size=Int[], Upper_Tail=Float64[], Lower_Tail=Float64[], Tail_Sum=Float64[], Tail_Difference=Float64[])
 
-# time this block
 @time begin
     for (distro, params, skewness) in distributions
         println("$(distro) with parameters $(params)")
