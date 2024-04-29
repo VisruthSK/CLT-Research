@@ -1,24 +1,39 @@
 using Distributions, Random, DataFrames, CSV
 
+function t_statistic(data, μ, σ)
+    n = length(data)
+    (mean(data) - μ) / (σ / sqrt(n))
+end
+
 function analysis(statistic, distro, n, r, params...)
     Random.seed!(0)
+
     d = distro(params...)
+    μ = mean(d)
+    σ = std(d)
 
     sample_statistics = zeros(r)
     Threads.@threads for i in 1:r
-        sample_statistics[i] = statistic(rand(d, n))
+        sample_statistics[i] = try
+            statistic(rand(d, n), μ, σ)
+        catch
+            statistic(rand(d, n))
+        end
     end
 
     m = mean(sample_statistics)
     s = std(sample_statistics)
 
-    upper = sum(sample_statistics .>= m + 1.96 * s) / r
-    lower = sum(sample_statistics .<= m - 1.96 * s) / r
+    # TODO not extensible
+    critical = statistic == mean ? quantile(Normal(), 0.975) : quantile(TDist(n - 1), 0.975)
+
+    upper = sum(sample_statistics .>= m + critical * s) / r
+    lower = sum(sample_statistics .<= m - critical * s) / r
 
     (upper, lower, upper + lower, upper - lower)
 end
 
-function analyze_distributions(r)
+function analyze_distributions(statistic, r)
     println("Analyzing distributions with $(r) repetitions")
 
     sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
@@ -38,7 +53,7 @@ function analyze_distributions(r)
     for (distro, params, skewness) in distributions
         println("$(distro) with parameters $(params)")
         for n in sample_sizes
-            upper, lower, tail_sum, tail_diff = analysis(mean, distro, n, r, params...)
+            upper, lower, tail_sum, tail_diff = analysis(statistic, distro, n, r, params...)
             push!(results, (string(distro), params, skewness, n, upper, lower, tail_sum, tail_diff))
         end
     end
@@ -46,8 +61,10 @@ function analyze_distributions(r)
     results
 end
 
-analyze_distributions(1) # compile
-results = analyze_distributions(10000)
-display(results)
+analyze_distributions(mean, 1) # compile
 
-CSV.write("CLT.csv", results)
+results = analyze_distributions(mean, 100000)
+CSV.write("CLT_means.csv", results)
+
+results = analyze_distributions(t_statistic, 100000)
+CSV.write("CLT_t.csv", results)

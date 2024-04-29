@@ -5,7 +5,9 @@ format: html
 # engine: julia
 ---
 
+
 ## Creating the Data
+
 
 ```{julia}
 #| output: false
@@ -17,7 +19,9 @@ function t_statistic(data, μ, σ)
 end
 ```
 
+
 Herein we create a simple function to calculate the t-value of some data given μ, σ. We will use this in our analysis later on to see if, analogous to the classically defined Central Limit Theorem, the sampling distribution of t-values can be well approximated by a t-distribution.
+
 
 ```{julia}
 #| output: false
@@ -49,7 +53,9 @@ function analysis(statistic, distro, n, r, params...)
 end
 ```
 
+
 This function creates a sampling distribution, using the given distribution and its parameters. It does this `r` times to mitigate any concerns of natural sampling variability. The function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed. The function then returns the tail weights along with their sum and difference. If this sampling distribution was approximately Gaussian, we would always expect tail weights of roughly 0.025, a sum of 0.05, and a difference of 0.
+
 
 ```{julia}
 #| output: false
@@ -83,7 +89,9 @@ end
 
 ```
 
+
 We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`.
+
 
 ```{julia}
 #| output: false
@@ -96,9 +104,11 @@ results = analyze_distributions(t_statistic, 100000)
 CSV.write("CLT_t.csv", results)
 ```
 
+
 Here we use 100,000 repetitions to create our sampling distributions of means and of t-statistics.
 
 ## Graphing Results
+
 
 ```{r}
 library(tidyverse)
@@ -110,71 +120,17 @@ df_t <- read.csv("CLT_t_sigma.csv")
 df_means_clean <- df_means |>
   filter(Distribution != "Poisson") |>
   mutate(
-    Combined = paste(Distribution, Params, Skewness, sep = " "),
-    Combined = fct(Combined)
+    combined = paste(Distribution, Params, sep = " "),
+    combined = fct(combined)
   ) |>
-  group_by(Combined)
-
-for (combined in unique(df_means_clean$Combined)) {
-  df_means_clean |>
-    filter(Combined == combined) |>
-    ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
-    geom_line() +
-    geom_hline(yintercept = 0.05, linetype = "dashed") +
-    labs(title = paste0("Central Limit Theorem:", combined, sep = " "), x = "Sample Size", y = "Tail Sum") +
-    ylim(0.03, 0.053)
-
-  ggsave(paste0("Plots/CLT_", combined, ".png"), width = 6, height = 4)
-}
+  group_by(combined)
+# TODO Fix this
+ggplot(df_means_clean, aes(x=))
+ggplot(df_means_clean, aes(x = Sample_Size, y = Tail_Sum)) +
+  geom_line() +
+  geom_hline(yintercept = 0.05, linetype = "dashed") +
+  labs(title = "Central Limit Theorem: Means", x = "Sample Size", y = "Tail Sum")
 ```
 
-
-```{r}
-for (combined in unique(df_means_clean$Combined)) {
-  df_means_clean |>
-    filter(Skewness < 20, Combined == combined) |>
-    ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
-    geom_line() +
-    geom_hline(yintercept = 0.05, linetype = "dashed") +
-    labs(title = paste0("Tail Sum as Sample Size Increases", combined, sep = " "), x = "Sample Size", y = "Tail Sum") +
-    ylim(0.042, 0.053)
-
-  ggsave(path = "Plots/Total", filename = paste0(combined, ".png"), width = 6, height = 4)
-}
-
-
-# ggplot(df_means_clean, aes(x = Sample_Size, y = Tail_Sum)) +
-#   geom_line() +
-#   geom_hline(yintercept = 0.05, linetype = "dashed") +
-#   labs(title = "Central Limit Theorem: Means", x = "Sample Size", y = "Tail Sum")
-```
-
-
-```{r}
-for (combined in unique(df_means_clean$Combined)) {
-  df_means_clean |>
-    filter(Combined == combined) |>
-    ggplot(aes(x = Sample_Size)) +
-    geom_line(aes(y = Lower_Tail)) +
-    geom_line(aes(y = Upper_Tail)) +
-    geom_hline(yintercept = 0.025, linetype = "dashed") +
-    labs(title = paste0("Tails as Sample Size Increases", combined, sep = " "), x = "Sample Size", y = "Tails")
-
-  ggsave(path = "Plots/Tails", filename = paste0(combined, ".png"), width = 6, height = 4)
-}
-```
-
-```{r}
-for (combined in unique(df_means_clean$Combined)) {
-  df_means_clean |>
-    filter(Combined == combined) |>
-    mutate(Tail_Difference = abs(Tail_Difference)) |>
-    ggplot(aes(x = Sample_Size, y = Tail_Difference)) +
-    geom_line() +
-    labs(title = paste0("Tail Difference as Sample Size Increases", combined, sep = " "), x = "Sample Size", y = "Tail Sum")
-
-  ggsave(path = "Plots/Diff", filename = paste0(combined, ".png"), width = 6, height = 4)
-}
-```
 
 TODO: With Quarto 1.5 use native Julia engine
