@@ -2,6 +2,7 @@
 title: "CLT"
 author: "Visruth Srimath Kandali"
 format: html
+embed-resources: true
 # engine: julia
 ---
 
@@ -108,7 +109,6 @@ df_t <- read.csv("CLT_t_sigma.csv")
 
 ```{r}
 df_means_clean <- df_means |>
-  filter(Distribution != "Poisson") |>
   mutate(
     Combined = paste(Distribution, Params, Skewness, sep = " "),
     Combined = fct(Combined)
@@ -128,11 +128,10 @@ for (combined in unique(df_means_clean$Combined)) {
 }
 ```
 
-
 ```{r}
 for (combined in unique(df_means_clean$Combined)) {
   df_means_clean |>
-    filter(Skewness < 20, Combined == combined) |>
+    filter(Combined == combined) |>
     ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
     geom_line() +
     geom_hline(yintercept = 0.05, linetype = "dashed") +
@@ -142,13 +141,20 @@ for (combined in unique(df_means_clean$Combined)) {
   ggsave(path = "Plots/Total", filename = paste0(combined, ".png"), width = 6, height = 4)
 }
 
+df_means_clean |>
+  filter(Distribution == "Poisson") |>
+  ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
+  geom_line() +
+  geom_hline(yintercept = 0.05, linetype = "dashed") +
+  labs(title = paste0("Tail Sum as Sample Size Increases", combined, sep = " "), x = "Sample Size", y = "Tail Sum")
+
+ggsave(path = "Plots/Total", filename = "Poisson [0.001] 31.6228.png", width = 6, height = 4)
 
 # ggplot(df_means_clean, aes(x = Sample_Size, y = Tail_Sum)) +
 #   geom_line() +
 #   geom_hline(yintercept = 0.05, linetype = "dashed") +
 #   labs(title = "Central Limit Theorem: Means", x = "Sample Size", y = "Tail Sum")
 ```
-
 
 ```{r}
 for (combined in unique(df_means_clean$Combined)) {
@@ -171,6 +177,7 @@ for (combined in unique(df_means_clean$Combined)) {
     mutate(Tail_Difference = abs(Tail_Difference)) |>
     ggplot(aes(x = Sample_Size, y = Tail_Difference)) +
     geom_line() +
+    geom_hline(yintercept = 0, linetype = "dashed") +
     labs(title = paste0("Tail Difference as Sample Size Increases", combined, sep = " "), x = "Sample Size", y = "Tail Sum")
 
   ggsave(path = "Plots/Diff", filename = paste0(combined, ".png"), width = 6, height = 4)
