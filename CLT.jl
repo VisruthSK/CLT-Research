@@ -4,26 +4,19 @@ function t_statistic(data, μ, σ)
     (mean(data) - μ) / (σ / sqrt(length(data)))
 end
 
-function analysis(statistic, d, n, r, critical, μ, σ)
-    
+function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, critical::Float64, μ::Float64, σ::Float64)
     sample_statistics = zeros(r)
     sample = zeros(n)
-    
+    rngs = [Xoshiro(i) for i in 1:Threads.nthreads()]
+
     @inbounds Threads.@threads for i in 1:r
-        Random.seed!(0)
-        rand!(Xoshiro(0), d, sample)
+        rand!(rngs[Threads.threadid()], d, sample)
         if statistic == mean
             sample_statistics[i] = statistic(sample)
         elseif statistic == t_statistic
             sample_statistics[i] = statistic(sample, μ, σ)
         end
     end
-
-    # if statistic == mean
-    #     sample_statistics = statistic.(sample_statistics)
-    # elseif statistic == t_statistic
-    #     sample_statistics = statistic.(sample_statistics, μ, σ)
-    # end
 
     m = mean(sample_statistics)
     s = std(sample_statistics)
@@ -34,7 +27,7 @@ function analysis(statistic, d, n, r, critical, μ, σ)
     (upper, lower, m, s)
 end
 
-function analyze_distributions(statistic, critical, r)
+function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
 
     sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
@@ -51,12 +44,12 @@ function analyze_distributions(statistic, critical, r)
     ]
     results = DataFrame(Distribution=String[], Skewness=Float64[], Sample_Size=Int[], Upper_Tail=Float64[], Lower_Tail=Float64[], Tail_Sum=Float64[], Tail_Difference=Float64[], Sampling_Mean=Float64[], sampling_SD=Float64[], Population_Mean=Float64[], Population_SD=Float64[])
 
-    @inbounds for d in distributions
+    @inbounds for d::Distribution in distributions
         println("$(string(d))")
 
-        μ = mean(d)
-        σ = std(d)
-        skewness = StatsBase.skewness(d)
+        μ::Float64 = mean(d)
+        σ::Float64 = std(d)
+        skewness::Float64 = StatsBase.skewness(d)
 
         @inbounds for n in sample_sizes
             upper, lower, m, s = analysis(statistic, d, n, r, critical, μ, σ)
@@ -71,23 +64,16 @@ end
 analyze_distributions(mean, quantile(Normal(), 0.975), 1)
 analyze_distributions(t_statistic, quantile(Normal(), 0.975), 1)
 
-
-
-@time results = analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
-CSV.write("CLT_means.csv", results)
-
-
-
-
 @time results = analyze_distributions(mean, quantile(Normal(), 0.975), 100000)
 CSV.write("CLT_means.csv", results)
 
 @time results = analyze_distributions(t_statistic, quantile(TDist(100000 - 1), 0.975), 100000)
 CSV.write("CLT_t.csv", results)
 
-@code_warntype analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
+@code_warntype analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
 
 using BenchmarkTools
 @profview analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
-@btime analyze_distributions(mean, quantile(Normal(), 0.975), 1000
+@btime analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
 
+# TODO Current implementation is not entirely reproducible, because of rand! and multithreading.
