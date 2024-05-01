@@ -213,3 +213,9 @@ df_means |>
   labs(title = "Central Limit Theorem: Normal", x = "Sample Size", y = "Tail Sum") +
   facet_wrap(~Skewness)
 ```
+
+```{r}
+read.csv("test.csv") |>
+  mutate(test = (1+Skewness)/sqrt(Sample_Size)) |> 
+  View()
+```
