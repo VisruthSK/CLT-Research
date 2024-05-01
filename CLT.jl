@@ -7,20 +7,22 @@ end
 function analysis(statistic, d, n, r, critical, μ, σ)
     Random.seed!(0)
 
-    # if statistic == mean
-    #     sample_statistics = statistic(rand(d, n, r))
-    # elseif statistic == t_statistic
-    #     sample_statistics = statistic(rand(d, n, r), μ, σ)
-    # end
-
     sample_statistics = zeros(r)
-    Threads.@threads for i in 1:r
-        sample = rand(d, n)
-        if statistic == mean
-            sample_statistics[i] = statistic(sample)
-        elseif statistic == t_statistic
-            sample_statistics[i] = statistic(sample, μ, σ)
-        end
+
+    @inbounds Threads.@threads for i in 1:r
+        rand!(d, sample_statistics)
+        # sample = rand(d, n)
+        # if statistic == mean
+        #     sample_statistics[i] = statistic(sample)
+        # elseif statistic == t_statistic
+        #     sample_statistics[i] = statistic(sample, μ, σ)
+        # end
+    end
+
+    if statistic == mean
+        sample_statistics = statistic.(sample_statistics)
+    elseif statistic == t_statistic
+        sample_statistics = statistic.(sample_statistics, μ, σ)
     end
 
     m = mean(sample_statistics)
@@ -75,3 +77,9 @@ CSV.write("CLT_means.csv", results)
 
 @time results = analyze_distributions(t_statistic, quantile(TDist(100000 - 1), 0.975), 100000)
 CSV.write("CLT_t.csv", results)
+
+
+
+using BenchmarkTools
+@profview analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
+@btime analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
