@@ -7,6 +7,12 @@ end
 function analysis(statistic, d, n, r, critical, μ, σ)
     Random.seed!(0)
 
+    # if statistic == mean
+    #     sample_statistics = statistic(rand(d, n, r))
+    # elseif statistic == t_statistic
+    #     sample_statistics = statistic(rand(d, n, r), μ, σ)
+    # end
+
     sample_statistics = zeros(r)
     Threads.@threads for i in 1:r
         sample = rand(d, n)
@@ -69,6 +75,3 @@ CSV.write("CLT_means.csv", results)
 
 @time results = analyze_distributions(t_statistic, quantile(TDist(100000 - 1), 0.975), 100000)
 CSV.write("CLT_t.csv", results)
-
-using BenchmarkTools
-@btime analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
