@@ -6,7 +6,9 @@ embed-resources: true
 # engine: julia
 ---
 
+
 ## Creating the Data
+
 
 ```{julia}
 #| output: false
@@ -18,7 +20,9 @@ function t_statistic(data, μ, σ)
 end
 ```
 
+
 Herein we create a simple function to calculate the t-value of some data given μ, σ. We will use this in our analysis later on to see if, analogous to the classically defined Central Limit Theorem, the sampling distribution of t-values can be well approximated by a t-distribution.
+
 
 ```{julia}
 #| output: false
@@ -50,7 +54,9 @@ function analysis(statistic, distro, n, r, params...)
 end
 ```
 
+
 This function creates a sampling distribution, using the given distribution and its parameters. It does this `r` times to mitigate any concerns of natural sampling variability. The function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed. The function then returns the tail weights along with their sum and difference. If this sampling distribution was approximately Gaussian, we would always expect tail weights of roughly 0.025, a sum of 0.05, and a difference of 0.
+
 
 ```{julia}
 #| output: false
@@ -84,7 +90,9 @@ end
 
 ```
 
+
 We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`.
+
 
 ```{julia}
 #| output: false
@@ -97,9 +105,11 @@ results = analyze_distributions(t_statistic, 100000)
 CSV.write("CLT_t.csv", results)
 ```
 
+
 Here we use 100,000 repetitions to create our sampling distributions of means and of t-statistics.
 
 ## Graphing Results
+
 
 ```{r setup}
 library(tidyverse)
@@ -184,32 +194,5 @@ for (combined in unique(df_means_clean$Combined)) {
 }
 ```
 
+
 TODO: With Quarto 1.5 use native Julia engine
-
-```{r}
-View(
-  df_means |>
-    mutate(avg_distance = mean(c(abs(Upper_Tail - 0.025), abs(Lower_Tail - 0.025)))) |>
-    filter(Tail_Sum >= 0.048, Tail_Difference <= 0.015)
-)
-```
-
-```{r}
-# df_means |>
-#   filter(str_detect(Distribution, "LogNormal")) |>
-#   ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
-#   geom_line() +
-#   geom_hline(yintercept = 0.05, linetype = "dashed") +
-#   labs(title = "Central Limit Theorem: LogNormal", x = "Sample Size", y = "Tail Sum") +
-#   ylim(0.03, 0.053) +
-#   facet_wrap(~Skewness)
-
-df_means |>
-  filter(str_detect(Distribution, "Normal"), Skewness < 10) |>
-  ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
-  geom_line(aes(y = Lower_Tail, color = "red")) +
-  geom_line(aes(y = Upper_Tail, color = "blue")) +
-  geom_hline(yintercept = 0.025, linetype = "dashed") +
-  labs(title = "Central Limit Theorem: Normal", x = "Sample Size", y = "Tail Sum") +
-  facet_wrap(~Skewness)
-```
