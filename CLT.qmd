@@ -216,6 +216,6 @@ df_means |>
 
 ```{r}
 read.csv("test.csv") |>
-  mutate(test = (1+Skewness)/sqrt(Sample_Size)) |> 
+  mutate(test = (1+Skewness)/sqrt(Sample_Size), .after = Tail_Difference) |> 
   View()
 ```

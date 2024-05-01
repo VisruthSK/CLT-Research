@@ -73,17 +73,18 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         end
     end
 
-    results
+    sort!(results, [:Distribution, :Sample_Size])
 end
 
 # compile
 analyze_distributions(mean, quantile(Normal(), 0.975), 1)
 # analyze_distributions(t_statistic, quantile(Normal(), 0.975), 1)
 
+
 @time CSV.write("test.csv", analyze_distributions(mean, quantile(Normal(), 0.975), 10000))
 
-# @time results = analyze_distributions(mean, quantile(Normal(), 0.975), 100000)
-# CSV.write("CLT_means.csv", results)
+@time results = analyze_distributions(mean, quantile(Normal(), 0.975), 100000)
+CSV.write("CLT_means.csv", results)
 
 # @time results = analyze_distributions(t_statistic, quantile(TDist(100000 - 1), 0.975), 100000)
 # CSV.write("CLT_t.csv", results)
@@ -92,7 +93,8 @@ analyze_distributions(mean, quantile(Normal(), 0.975), 1)
 
 # using BenchmarkTools
 # @profview analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
-# @btime analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
+# @btime analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
 
 # TODO Current implementation is not entirely reproducible, because of rand! and multithreading.
-# TODO Fix last normal values not being generated
+
+# TODO Check reproducibility and maybe move around threading
