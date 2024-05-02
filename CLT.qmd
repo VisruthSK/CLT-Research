@@ -187,11 +187,14 @@ for (combined in unique(df_means_clean$Combined)) {
 TODO: With Quarto 1.5 use native Julia engine
 
 ```{r}
-View(
-  df_means |>
-    mutate(avg_distance = mean(c(abs(Upper_Tail - 0.025), abs(Lower_Tail - 0.025)))) |>
-    filter(Tail_Sum >= 0.048, Tail_Difference <= 0.015)
-)
+df_means |>
+  mutate(test = (1 + Skewness) / sqrt(Sample_Size), .after = Tail_Difference) |>
+  filter(Tail_Sum >= 0.048, Tail_Difference <= 0.015) |>
+  # get the maximum test value for each distribution
+  group_by(Distribution) |>
+  summarize(Max_Test = max(test)) |>
+  arrange(desc(Max_Test)) |>
+  View()
 ```
 
 ```{r}
@@ -216,6 +219,15 @@ df_means |>
 
 ```{r}
 read.csv("test.csv") |>
-  mutate(test = (1+Skewness)/sqrt(Sample_Size), .after = Tail_Difference) |> 
+  mutate(test = (1 + Skewness) / sqrt(Sample_Size), .after = Tail_Difference) |>
+  arrange(Distribution, Sample_Size) |>
+  filter(str_detect(Distribution, "Normal"), Skewness < 10) |>
   View()
+  # ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
+  # ylim(0, 0.1) +
+  # geom_line() +
+  # # geom_line(aes(y = Tail_Sum, color = "red")) +
+  # geom_hline(yintercept = 0.05, linetype = "dashed") +
+  # labs(title = "Central Limit Theorem: Normal", x = "Sample Size", y = "Tail Sum") |>
+  # facet_wrap(~Skewness)
 ```

@@ -1,4 +1,4 @@
-using Distributions, Random, DataFrames, CSV, StatsBase
+using Distributions, Random, DataFrames, CSV, StatsBase, StatsPlots
 
 function t_statistic(data, μ, σ)
     (mean(data) - μ) / (σ / sqrt(length(data)))
@@ -8,7 +8,7 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
     sample_statistics = zeros(r)
     sample = zeros(n)
 
-    for i in 1:r
+    @inbounds for i in 1:r
         rand!(d, sample)
         if statistic == mean
             sample_statistics[i] = statistic(sample)
@@ -24,7 +24,7 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
     upper = sum(sample_statistics .>= m + critical * s) / r
     lower = sum(sample_statistics .<= m - critical * s) / r
 
-    (upper, lower, m, s, skewness)
+    (upper, lower, m, s, skewness, sample_statistics)
 end
 
 function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
@@ -57,7 +57,7 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         Population_SD=Float64[]
     )
 
-    for d::Distribution in distributions
+    @inbounds for d::Distribution in distributions
         println("$(string(d))")
 
         μ::Float64 = mean(d)
@@ -65,9 +65,10 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         skewness::Float64 = StatsBase.skewness(d)
 
         u = Threads.SpinLock()
-        Threads.@threads for n in sample_sizes
-            upper, lower, m, s, sample_skew = analysis(statistic, d, n, r, critical, μ, σ)
+        @inbounds Threads.@threads for n in sample_sizes
+            upper, lower, m, s, sample_skew, sampling = analysis(statistic, d, n, r, critical, μ, σ)
             Threads.lock(u) do
+                histogram(sampling, title="$(string(d)) - n=$(n)", label="Sampling Distribution", legend=:topleft)
                 push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, μ, σ))
             end
         end
@@ -81,7 +82,7 @@ analyze_distributions(mean, quantile(Normal(), 0.975), 1)
 # analyze_distributions(t_statistic, quantile(Normal(), 0.975), 1)
 
 
-@time CSV.write("test.csv", analyze_distributions(mean, quantile(Normal(), 0.975), 10000))
+@time CSV.write("test.csv", analyze_distributions(mean, quantile(Normal(), 0.975), 100000))
 
 @time results = analyze_distributions(mean, quantile(Normal(), 0.975), 100000)
 CSV.write("CLT_means.csv", results)
@@ -96,5 +97,3 @@ CSV.write("CLT_means.csv", results)
 # @btime analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
 
 # TODO Current implementation is not entirely reproducible, because of rand! and multithreading.
-
-# TODO Check reproducibility and maybe move around threading
