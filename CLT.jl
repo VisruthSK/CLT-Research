@@ -5,9 +5,11 @@ function t_statistic(data, μ, σ)
 end
 
 function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, critical::Float64, μ::Float64, σ::Float64)
+    Random.seed!(0)
     sample_statistics = zeros(r)
     sample = zeros(n)
 
+    # TODO test again with this being threaded and locked
     @inbounds for i in 1:r
         rand!(d, sample)
         if statistic == mean
@@ -31,7 +33,8 @@ end
 function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
 
-    sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
+    # sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
+    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
         LogNormal(0, 1.4865),
         Poisson(0.001),
