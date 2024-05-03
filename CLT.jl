@@ -1,4 +1,4 @@
-using Distributions, Random, DataFrames, CSV, StatsBase, StatsPlots
+using Distributions, Random, DataFrames, CSV, StatsBase
 
 function t_statistic(data, μ, σ)
     (mean(data) - μ) / (σ / sqrt(length(data)))
@@ -20,11 +20,12 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
     m = mean(sample_statistics)
     s = std(sample_statistics)
     skewness = StatsBase.skewness(sample_statistics)
+    kurtosis = StatsBase.kurtosis(sample_statistics)
 
     upper = sum(sample_statistics .>= m + critical * s) / r
     lower = sum(sample_statistics .<= m - critical * s) / r
 
-    (upper, lower, m, s, skewness, sample_statistics)
+    (upper, lower, m, s, skewness, kurtosis)
 end
 
 function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
@@ -53,6 +54,7 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         Sampling_Mean=Float64[],
         Sampling_SD=Float64[],
         Sampling_Skewness=Float64[],
+        Sampling_Kurtosis=Float64[],
         Population_Mean=Float64[],
         Population_SD=Float64[]
     )
@@ -66,10 +68,9 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
 
         u = Threads.SpinLock()
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, m, s, sample_skew, sampling = analysis(statistic, d, n, r, critical, μ, σ)
+            upper, lower, m, s, sample_skew, sample_kurt = analysis(statistic, d, n, r, critical, μ, σ)
             Threads.lock(u) do
-                histogram(sampling, title="$(string(d)) - n=$(n)", label="Sampling Distribution", legend=:topleft)
-                push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, μ, σ))
+                push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, sample_kurt, μ, σ))
             end
         end
     end

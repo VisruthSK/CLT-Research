@@ -190,10 +190,11 @@ TODO: With Quarto 1.5 use native Julia engine
 df_means |>
   mutate(test = (1 + Skewness) / sqrt(Sample_Size), .after = Tail_Difference) |>
   filter(Tail_Sum >= 0.048, Tail_Difference <= 0.015) |>
-  # get the maximum test value for each distribution
+  # get the maximum test value for each distribution along with its skewness and sample size
   group_by(Distribution) |>
-  summarize(Max_Test = max(test)) |>
-  arrange(desc(Max_Test)) |>
+  filter(test == max(test)) |>
+  arrange(Distribution) |>
+  select(Distribution, Skewness, Sample_Size, test) |>
   View()
 ```
 
@@ -219,9 +220,11 @@ df_means |>
 
 ```{r}
 read.csv("test.csv") |>
-  mutate(test = (1 + Skewness) / sqrt(Sample_Size), .after = Tail_Difference) |>
+  mutate(test = (1 + abs(Skewness)) / sqrt(Sample_Size), .after = Tail_Difference) |>
   arrange(Distribution, Sample_Size) |>
-  filter(str_detect(Distribution, "Normal"), Skewness < 10) |>
+  # filter(Sampling_Kurtosis < 0.001) |> 
+  filter(test <= 0.2) |>
+  # filter(str_detect(Distribution, "Normal"), Skewness < 10) |>
   View()
   # ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
   # ylim(0, 0.1) +
