@@ -1,15 +1,14 @@
-using Distributions, Random, DataFrames, CSV, StatsBase
+using Distributions, Random, DataFrames, CSV, StatsBase, HypothesisTests
 
 function t_statistic(data, μ, σ)
     (mean(data) - μ) / (σ / sqrt(length(data)))
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, critical::Float64, μ::Float64, σ::Float64)
+function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, critical::Float64, μ::Number, σ::Number)
     Random.seed!(0)
     sample_statistics = zeros(r)
     sample = zeros(n)
 
-    # TODO test again with this being threaded and locked
     @inbounds for i in 1:r
         rand!(d, sample)
         if statistic == mean
@@ -22,12 +21,14 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
     m = mean(sample_statistics)
     s = std(sample_statistics)
     skewness = StatsBase.skewness(sample_statistics)
-    kurtosis = StatsBase.kurtosis(sample_statistics)
+    kurtosis = StatsBase.kurtosis(sample_statistics) # excess kurtosis
+    pbool = pvalue(JarqueBeraTest(sample_statistics)) > 0.05
 
     upper = sum(sample_statistics .>= m + critical * s) / r
     lower = sum(sample_statistics .<= m - critical * s) / r
 
-    (upper, lower, m, s, skewness, kurtosis)
+    (upper, lower, m, s, skewness, kurtosis, pbool)
+    sample_statistics
 end
 
 function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
@@ -58,6 +59,7 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         Sampling_SD=Float64[],
         Sampling_Skewness=Float64[],
         Sampling_Kurtosis=Float64[],
+        Normal=Bool[],
         Population_Mean=Float64[],
         Population_SD=Float64[]
     )
@@ -71,20 +73,37 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
 
         u = Threads.SpinLock()
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, m, s, sample_skew, sample_kurt = analysis(statistic, d, n, r, critical, μ, σ)
+            upper, lower, m, s, sample_skew, sample_kurt, pbool = analysis(statistic, d, n, r, critical, μ, σ)
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, sample_kurt, μ, σ))
+                push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, sample_kurt, pbool, μ, σ))
             end
         end
+
     end
 
     sort!(results, [:Distribution, :Sample_Size])
 end
 
+
+using Plots, StatsPlots
+sample_statistics = analysis(mean, Normal(), 5, 100000, quantile(Normal(), 0.975), 0, 1)
+m = mean(sample_statistics)
+s = std(sample_statistics)
+skewness = StatsBase.skewness(sample_statistics)
+kurtosis = StatsBase.kurtosis(sample_statistics)
+
+upper = sum(sample_statistics .>= m + quantile(Normal(), 0.975) * s) / 100000
+lower = sum(sample_statistics .<= m - quantile(Normal(), 0.975) * s) / 100000
+# histogram of sample_statistics
+histogram(sample_statistics, bins=100)
+
+qqplot(Normal(), sample_statistics)
+
+CSV.write("qq.csv", DataFrame(sample_statistics=sample_statistics))
+
 # compile
 analyze_distributions(mean, quantile(Normal(), 0.975), 1)
 # analyze_distributions(t_statistic, quantile(Normal(), 0.975), 1)
-
 
 @time CSV.write("test.csv", analyze_distributions(mean, quantile(Normal(), 0.975), 100000))
 
@@ -99,5 +118,3 @@ CSV.write("CLT_means.csv", results)
 # using BenchmarkTools
 # @profview analyze_distributions(mean, quantile(Normal(), 0.975), 10000)
 # @btime analyze_distributions(mean, quantile(Normal(), 0.975), 1000)
-
-# TODO Current implementation is not entirely reproducible, because of rand! and multithreading.

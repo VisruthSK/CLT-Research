@@ -1,4 +1,5 @@
 ---
+10---
 title: "CLT"
 author: "Visruth Srimath Kandali"
 format: html
@@ -222,15 +223,65 @@ df_means |>
 read.csv("test.csv") |>
   mutate(test = (1 + abs(Skewness)) / sqrt(Sample_Size), .after = Tail_Difference) |>
   arrange(Distribution, Sample_Size) |>
-  # filter(Sampling_Kurtosis < 0.001) |> 
-  filter(test <= 0.2) |>
-  # filter(str_detect(Distribution, "Normal"), Skewness < 10) |>
+  ggplot(aes(x = Sample_Size, y = test)) +
+  geom_line(aes(y = Tail_Sum)) +
+  geom_line(aes(y = Lower_Tail, color = "red")) +
+  geom_line(aes(y = Upper_Tail, color = "blue")) +
+  ylim(0, 0.1) +
+  facet_wrap(~Skewness)
+# filter(Sampling_Kurtosis < 0.001) |>
+# filter(test <= 0.2) |>
+# filter(str_detect(Distribution, "Normal"), Skewness < 10) |>
+# View()
+# ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
+# ylim(0, 0.1) +
+# geom_line() +
+# # geom_line(aes(y = Tail_Sum, color = "red")) +
+# geom_hline(yintercept = 0.05, linetype = "dashed") +
+# labs(title = "Central Limit Theorem: Normal", x = "Sample Size", y = "Tail Sum") |>
+# facet_wrap(~Skewness)
+```
+
+```{r}
+read.csv("test.csv") |>
+  arrange(abs(Skewness), Distribution) |>
   View()
-  # ggplot(aes(x = Sample_Size, y = Tail_Sum)) +
-  # ylim(0, 0.1) +
-  # geom_line() +
-  # # geom_line(aes(y = Tail_Sum, color = "red")) +
-  # geom_hline(yintercept = 0.05, linetype = "dashed") +
-  # labs(title = "Central Limit Theorem: Normal", x = "Sample Size", y = "Tail Sum") |>
-  # facet_wrap(~Skewness)
+```
+
+```{r}
+read.csv("test.csv") |>
+  # df_means |>
+  mutate(test = (sqrt(Sample_Size)/(1+abs(Skewness))), .after = Tail_Difference) |>
+  arrange(abs(Skewness), Sample_Size) |>
+  select(Distribution, Skewness, Sample_Size, test) |>
+  # group_by(abs(Skewness)) |>
+  pivot_wider(names_from = Sample_Size, values_from = test) |>
+  # summarize(min(test)) |>
+  # filter(test <= .2) |>
+  # filter(Tail_Sum >= 0.048, abs(Tail_Difference) <= 0.010) |>
+  View()
+
+x <- function(skew, n) sqrt(n)/(1 + abs(skew))
+```
+
+```{r}
+read.csv("test.csv") |>
+  # mutate(test = (sqrt(Sample_Size)/(1+abs(Skewness))), .after = Tail_Difference) |>
+  arrange(abs(Skewness), Sample_Size) |>
+  select(Distribution, Skewness, Sample_Size,Tail_Sum) |>
+  mutate(Tail_Sum = abs(0.05-Tail_Sum) <= 0.001) |>
+  pivot_wider(names_from = Sample_Size, values_from = Tail_Sum) |>
+  View()
+```
+
+```{r}
+x <- read.csv("qq.csv") |>
+pull(sample_statistics)
+
+qqnorm(x)
+qqline(x)
+
+# fit <- lm(qqnorm(x)$x ~ qqnorm(x)$y)
+# rsquared <- summary(fit)$r.squared
+# print(rsquared)
 ```
