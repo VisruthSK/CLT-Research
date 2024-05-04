@@ -1,11 +1,10 @@
-using Distributions, Random, DataFrames, CSV, StatsBase, HypothesisTests
+using Distributions, Random, DataFrames, CSV, StatsBase
 
-function t_statistic(data, μ, σ)
-    # TODO Use sample mean here
-    (mean(data) - μ) / (σ / sqrt(length(data)))
+function t_statistic(data::Vector, μ::Float64)
+    (mean(data) - μ) / (std(data) / sqrt(length(data)))
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, critical::Float64, μ::Number, σ::Number)
+function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, μ::Number, σ::Number)
     Random.seed!(0)
     sample_statistics = zeros(r)
     sample = zeros(n)
@@ -15,7 +14,7 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
         if statistic == mean
             sample_statistics[i] = statistic(sample)
         elseif statistic == t_statistic
-            sample_statistics[i] = statistic(sample, μ, σ)
+            sample_statistics[i] = statistic(sample, μ)
         end
     end
 
@@ -23,42 +22,30 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
     s = std(sample_statistics)
     skewness = StatsBase.skewness(sample_statistics)
     kurtosis = StatsBase.kurtosis(sample_statistics) # excess kurtosis
-    pbool = pvalue(JarqueBeraTest(sample_statistics)) > 0.05
-
 
     μ::Float64 = mean(d)
     σ::Float64 = std(d)
 
-    # upper = sum(sample_statistics .>= m + critical * s) / r
-    # lower = sum(sample_statistics .<= m - critical * s) / r
-
-    # calculate the z scores of all the samples
-    # z_scores = (sample_statistics .- μ) ./ (σ / sqrt(n))
     z_scores = (sample_statistics .- μ) ./ (σ / sqrt(n))
     upper = sum(z_scores .>= 1.96) / r
     lower = sum(z_scores .<= -1.96) / r
 
-    # TODO use z score calculation
-
-    sample_statistics
-    (upper, lower, m, s, skewness, kurtosis, pbool)
+    (upper, lower, m, s, skewness, kurtosis)
 end
 
 function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
 
-    # sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
     sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
-        LogNormal(0, 1.4865),
-        Poisson(0.001),
-        Gamma(4),
-        LogNormal(0, 1),
-        Exponential(),
-        LogNormal(0, 0.5),
+        Gamma(16),
         LogNormal(0, 0.25),
-        Beta(0.3, 0.2),
-        Normal()
+        Gamma(4),
+        Gamma(2),
+        LogNormal(0, 0.5),
+        Gamma(1),
+        Exponential(),
+        LogNormal(0, 0.75)
     ]
 
     results = DataFrame(
@@ -73,7 +60,6 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         Sampling_SD=Float64[],
         Sampling_Skewness=Float64[],
         Sampling_Kurtosis=Float64[],
-        Normal=Bool[],
         Population_Mean=Float64[],
         Population_SD=Float64[]
     )
@@ -87,9 +73,9 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
 
         u = Threads.SpinLock()
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, m, s, sample_skew, sample_kurt, pbool = analysis(statistic, d, n, r, critical, μ, σ)
+            upper, lower, m, s, sample_skew, sample_kurt = analysis(statistic, d, n, r, μ, σ)
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, sample_kurt, pbool, μ, σ))
+                push!(results, (string(d), skewness, n, upper, lower, upper + lower, upper - lower, m, s, sample_skew, sample_kurt, μ, σ))
             end
         end
 
@@ -117,9 +103,9 @@ CSV.write("qq.csv", DataFrame(sample_statistics=sample_statistics))
 
 # compile
 analyze_distributions(mean, quantile(Normal(), 0.975), 1)
-# analyze_distributions(t_statistic, quantile(Normal(), 0.975), 1)
+analyze_distributions(t_statistic, quantile(Normal(), 0.975), 1)
 
-@time CSV.write("test.csv", analyze_distributions(mean, quantile(Normal(), 0.975), 100000))
+@time CSV.write("test.csv", analyze_distributions(mean, quantile(Normal(), 0.975), 1000000))
 
 @time results = analyze_distributions(mean, quantile(Normal(), 0.975), 100000)
 CSV.write("CLT_means.csv", results)
