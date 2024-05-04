@@ -1,6 +1,7 @@
 using Distributions, Random, DataFrames, CSV, StatsBase, HypothesisTests
 
 function t_statistic(data, μ, σ)
+    # TODO Use sample mean here
     (mean(data) - μ) / (σ / sqrt(length(data)))
 end
 
@@ -24,22 +25,34 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, crit
     kurtosis = StatsBase.kurtosis(sample_statistics) # excess kurtosis
     pbool = pvalue(JarqueBeraTest(sample_statistics)) > 0.05
 
-    upper = sum(sample_statistics .>= m + critical * s) / r
-    lower = sum(sample_statistics .<= m - critical * s) / r
 
-    (upper, lower, m, s, skewness, kurtosis, pbool)
+    μ::Float64 = mean(d)
+    σ::Float64 = std(d)
+
+    # upper = sum(sample_statistics .>= m + critical * s) / r
+    # lower = sum(sample_statistics .<= m - critical * s) / r
+
+    # calculate the z scores of all the samples
+    # z_scores = (sample_statistics .- μ) ./ (σ / sqrt(n))
+    z_scores = (sample_statistics .- μ) ./ (σ / sqrt(n))
+    upper = sum(z_scores .>= 1.96) / r
+    lower = sum(z_scores .<= -1.96) / r
+
+    # TODO use z score calculation
+
     sample_statistics
+    (upper, lower, m, s, skewness, kurtosis, pbool)
 end
 
 function analyze_distributions(statistic::Function, critical::Float64, r::Number)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
 
     # sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
-    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
+    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
         LogNormal(0, 1.4865),
         Poisson(0.001),
-        Gamma(0.02),
+        Gamma(4),
         LogNormal(0, 1),
         Exponential(),
         LogNormal(0, 0.5),
@@ -47,6 +60,7 @@ function analyze_distributions(statistic::Function, critical::Float64, r::Number
         Beta(0.3, 0.2),
         Normal()
     ]
+
     results = DataFrame(
         Distribution=String[],
         Skewness=Float64[],

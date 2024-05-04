@@ -188,7 +188,7 @@ for (combined in unique(df_means_clean$Combined)) {
 TODO: With Quarto 1.5 use native Julia engine
 
 ```{r}
-df_means |>
+read.csv("test.csv") |>
   mutate(test = (1 + Skewness) / sqrt(Sample_Size), .after = Tail_Difference) |>
   filter(Tail_Sum >= 0.048, Tail_Difference <= 0.015) |>
   # get the maximum test value for each distribution along with its skewness and sample size
@@ -221,13 +221,16 @@ df_means |>
 
 ```{r}
 read.csv("test.csv") |>
+filter(Skewness < 6) |>
   mutate(test = (1 + abs(Skewness)) / sqrt(Sample_Size), .after = Tail_Difference) |>
   arrange(Distribution, Sample_Size) |>
   ggplot(aes(x = Sample_Size, y = test)) +
-  geom_line(aes(y = Tail_Sum)) +
-  geom_line(aes(y = Lower_Tail, color = "red")) +
-  geom_line(aes(y = Upper_Tail, color = "blue")) +
-  ylim(0, 0.1) +
+  geom_line(aes(y = test)) +
+  geom_hline(yintercept = 0.036, linetype = "dashed") + 
+geom_vline(xintercept - 30, linteype = "dashed") +
+  # geom_line(aes(y = Lower_Tail, color = "red")) +
+  # geom_line(aes(y = Upper_Tail, color = "blue")) +
+  # ylim(0, 0.1) +
   facet_wrap(~Skewness)
 # filter(Sampling_Kurtosis < 0.001) |>
 # filter(test <= 0.2) |>
@@ -243,8 +246,13 @@ read.csv("test.csv") |>
 ```
 
 ```{r}
+diff = 0.005
+print(0.025 - diff)
+print(0.025 + diff)
 read.csv("test.csv") |>
   arrange(abs(Skewness), Distribution) |>
+  filter(Lower_Tail >= 0.025-diff & Lower_Tail < 0.025+diff) |>
+  filter(Upper_Tail >= 0.025-diff & Upper_Tail < 0.025+diff) |>
   View()
 ```
 
@@ -284,4 +292,49 @@ qqline(x)
 # fit <- lm(qqnorm(x)$x ~ qqnorm(x)$y)
 # rsquared <- summary(fit)$r.squared
 # print(rsquared)
+```
+
+```{r}
+read.csv("test.csv") |>
+View()
+```
+
+```{r}
+read.csv("test.csv") |>
+# filter(str_detect(Distribution, "Exponential")) |>
+filter(Skewness == 1.7502) |>
+ggplot(aes(x=Sample_Size, y=Sampling_Skewness)) +
+  geom_line() +
+  geom_hline(yintercept = .1723, linetype = "dashed")
+```
+
+```{r}
+diff = 0.005
+read.csv("test.csv") |>
+    filter(!str_detect(Distribution,"Poisson")) |>
+  filter(Lower_Tail >= 0.025-diff & Lower_Tail < 0.025+diff) |>
+  filter(Upper_Tail >= 0.025-diff & Upper_Tail < 0.025+diff) |>
+  group_by(Distribution) |>
+  filter(Sample_Size == min(Sample_Size)) |>
+  arrange(Distribution) |>
+  select(Distribution, Skewness, Sampling_Skewness, Sample_Size) |>
+filter(Skewness > 0) |>
+  # View()
+  ggplot(aes(y=abs(Skewness), x=sqrt(Sample_Size))) +
+geom_line()
+
+temp <- read.csv("test.csv") |>
+    filter(!str_detect(Distribution,"Poisson")) |>
+  filter(Lower_Tail >= 0.025-diff & Lower_Tail < 0.025+diff) |>
+  filter(Upper_Tail >= 0.025-diff & Upper_Tail < 0.025+diff) |>
+  group_by(Distribution) |>
+  filter(Sample_Size == min(Sample_Size)) |>
+  arrange(Distribution) |>
+  select(Distribution, Skewness, Sampling_Skewness, Sample_Size) |>
+filter(Skewness > 0)
+print(temp)
+lm(Skewness ~ sqrt(Sample_Size), temp)
+
+temp |> 
+  mutate(test = Skewness/)
 ```
