@@ -1,7 +1,9 @@
 ---
 title: "Effects of Skewness on Sample Size in CLT"
 author: "Visruth Srimath Kandali. Beth Chance, California Polytechnic Department of Statistics"
-format: html
+format: 
+    html:
+        df-print: kable
 embed-resources: true
 # engine: julia
 ---
@@ -90,24 +92,24 @@ function analyze_distributions(statistic::Function, r::Number)::DataFrame
 end
 ```
 
-We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`. We selected these distributions to showcase the effects of skewness pan distribution as well as within the same distribution.
+We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`. We selected these distributions to showcase the effects of skewness across differing distributions as well as the effects of skewness within the same distribution.
 
 ```{julia Generate data}
 #| output: false
 # compiling the function
 analyze_distributions(mean, 1)
 
-results = analyze_distributions(mean, 1_000_000)
-# results = analyze_distributions(mean, 1000)
+# results = analyze_distributions(mean, 1_000_000)
+results = analyze_distributions(mean, 1000)
 CSV.write("means.csv", results)
 ```
 
-Here we use r = 1,000,000 repetitions to create our sampling distributions of means. Keep in mind that, while Julia is fast, this is still a non-trivial task and will take some time, especially if you aren't explicitly using the new Julia engine to be introduced in Quarto 1.5. It is highly recommended to run the code in a Julia REPL instead of this notebook.
+Here we use r = 1,000,000 repetitions to create our sampling distributions of means. Keep in mind that, while Julia is fast, this is still a non-trivial task and will take some time. It is highly recommended to run the code in a Julia REPL instead of this notebook.
 
 ## Analyzing the Data
 
 ```{r setup}
-#| output: false
+#| message: false
 library(tidyverse)
 
 df <- read_csv("means.csv") |>
@@ -120,8 +122,7 @@ df <- read_csv("means.csv") |>
   select(Distribution, Skewness, Sampling_Skewness, Sample_Size) |>
   arrange(Skewness, Distribution)
 
-df |>
-  knitr::kable(format = "markdown")
+df
 ```
 
 ```{r Fitting the model}
@@ -140,7 +141,7 @@ df |>
 print(model)
 ```
 
-```{r}
+```{r graphing}
 set.seed(0)
 
 # Generate random values from a normal distribution
@@ -150,9 +151,8 @@ df <- data.frame(value = data)
 
 # Create a histogram using ggplot2
 ggplot(data = df, aes(x = value)) +
-  geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black", aes(y = ..density..)) +
+  geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black", aes(y = after_stat(density))) +
   labs(title = "Histogram of Random Values from Exponential Distribution",
        x = "Values",
        y = "Density")
 ```
-
