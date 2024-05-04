@@ -1,6 +1,6 @@
 ---
 title: "Effects of Skewness on Sample Size in CLT"
-author: "Visruth Srimath Kandal. Beth Chance, California Polytechnic Department of Statistics"
+author: "Visruth Srimath Kandali. Beth Chance, California Polytechnic Department of Statistics"
 format: html
 embed-resources: true
 # engine: julia
@@ -139,3 +139,20 @@ df |>
 
 print(model)
 ```
+
+```{r}
+set.seed(0)
+
+# Generate random values from a normal distribution
+data <- rexp(1000)
+
+df <- data.frame(value = data)
+
+# Create a histogram using ggplot2
+ggplot(data = df, aes(x = value)) +
+  geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black", aes(y = ..density..)) +
+  labs(title = "Histogram of Random Values from Exponential Distribution",
+       x = "Values",
+       y = "Density")
+```
+
