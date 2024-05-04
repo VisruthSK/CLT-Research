@@ -1,7 +1,6 @@
 ---
-10---
-title: "CLT"
-author: "Visruth Srimath Kandali"
+title: "Effects of Skewness on Sample Size in CLT"
+author: "Visruth Srimath Kandal. Beth Chance, California Polytechnic Department of Statistics"
 format: html
 embed-resources: true
 # engine: julia
@@ -9,114 +8,134 @@ embed-resources: true
 
 ## Creating the Data
 
-```{julia}
+```{julia Single distribution analysis}
 #| output: false
-using Distributions, Random, DataFrames, CSV
+using Distributions, Random, DataFrames, CSV, StatsBase
 
-function analysis(statistic, distro, n, r, params...)
+function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, μ::Number)
     Random.seed!(0)
-
-    d = distro(params...)
-    μ = mean(d)
-    σ = std(d)
-
     sample_statistics = zeros(r)
-    Threads.@threads for i in 1:r
-        sample_statistics[i] = try
-            statistic(rand(d, n), μ, σ)
-        catch
-            statistic(rand(d, n))
+    sample = zeros(n)
+
+    @inbounds for i in 1:r
+        rand!(d, sample)
+        if statistic == mean
+            sample_statistics[i] = statistic(sample)
+        elseif statistic == t_statistic
+            sample_statistics[i] = statistic(sample, μ)
         end
     end
 
-    m = mean(sample_statistics)
-    s = std(sample_statistics)
+    skewness = StatsBase.skewness(sample_statistics)
 
-    critical = statistic == mean ? quantile(Normal(), 0.975) : quantile(TDist(n - 1), 0.975)
+    μ::Float64 = mean(d)
+    σ::Float64 = std(d)
 
-    upper = sum(sample_statistics .>= m + critical * s) / r
-    lower = sum(sample_statistics .<= m - critical * s) / r
+    z_scores = (sample_statistics .- μ) ./ (σ / sqrt(n))
+    upper = sum(z_scores .>= 1.96) / r
+    lower = sum(z_scores .<= -1.96) / r
 
-    (upper, lower, upper + lower, upper - lower)
+    (upper, lower, skewness)
 end
 ```
 
-This function creates a sampling distribution, using the given distribution and its parameters. It does this `r` times to mitigate any concerns of natural sampling variability. The function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed. The function then returns the tail weights along with their sum and difference. If this sampling distribution was approximately Gaussian, we would always expect tail weights of roughly 0.025, a sum of 0.05, and a difference of 0.
+This function creates a sampling distribution, using the given distribution and its parameters. It does this `r` times to mitigate any concerns of natural sampling variability. The function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed by looking at z-scores more extreme than $\pm$ 1.96. The function then returns the tail weights along with the skewness of the sampling distribution.
 
-```{julia}
+```{julia Perform analysis on distributions}
 #| output: false
-function analyze_distributions(statistic, r)
+function analyze_distributions(statistic::Function, r::Number)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
 
-    sample_sizes = [5, 10, 20, 30, 40, 100, 200, 300, 400, 1000, 2000, 3000, 4000, 5000, 10000]
+    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
-        (LogNormal, [0, 1.4865], 31.65266),
-        (Poisson, [0.001], 31.6228),
-        (Gamma, [0.02], 20),
-        (LogNormal, [0, 1], 6.1849),
-        (Exponential, [], 2),
-        (LogNormal, [0, 0.5], 1.7502),
-        (LogNormal, [0, 0.25], 0.7883),
-        (Beta, [0.3, 0.2], -0.4),
-        (Normal, [], 0)
+        Gamma(16),
+        LogNormal(0, 0.25),
+        Gamma(4),
+        Gamma(2),
+        LogNormal(0, 0.5),
+        Gamma(1),
+        Exponential(),
+        LogNormal(0, 0.75)
     ]
-    results = DataFrame(Distribution=String[], Params=Vector[], Skewness=Float64[], Sample_Size=Int[], Upper_Tail=Float64[], Lower_Tail=Float64[], Tail_Sum=Float64[], Tail_Difference=Float64[])
 
-    for (distro, params, skewness) in distributions
-        println("$(distro) with parameters $(params)")
-        for n in sample_sizes
-            upper, lower, tail_sum, tail_diff = analysis(statistic, distro, n, r, params...)
-            push!(results, (string(distro), params, skewness, n, upper, lower, tail_sum, tail_diff))
+    results = DataFrame(
+        Distribution=String[],
+        Skewness=Float64[],
+        Sample_Size=Int[],
+        Upper_Tail=Float64[],
+        Lower_Tail=Float64[],
+        Sampling_Skewness=Float64[],
+        Population_Mean=Float64[],
+        Population_SD=Float64[]
+    )
+
+    @inbounds for d::Distribution in distributions
+        println("$(string(d))")
+
+        μ::Float64 = mean(d)
+        σ::Float64 = std(d)
+        skewness::Float64 = StatsBase.skewness(d)
+
+        u = Threads.SpinLock()
+        @inbounds Threads.@threads for n in sample_sizes
+            upper, lower, sample_skew = analysis(statistic, d, n, r, μ)
+            Threads.lock(u) do
+                push!(results, (string(d), skewness, n, upper, lower, sample_skew, μ, σ))
+            end
         end
+
     end
 
-    results
+    sort!(results, [:Distribution, :Sample_Size])
 end
-
 ```
 
-We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`.
+We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`. We selected these distributions to showcase the effects of skewness pan distribution as well as within the same distribution.
 
-```{julia}
+```{julia Generate data}
 #| output: false
 # compiling the function
 analyze_distributions(mean, 1)
 
-results = analyze_distributions(mean, 1000000)
+results = analyze_distributions(mean, 1_000_000)
+# results = analyze_distributions(mean, 1000)
 CSV.write("means.csv", results)
 ```
 
-Here we use 1,000,000 repetitions to create our sampling distributions of means.
+Here we use r = 1,000,000 repetitions to create our sampling distributions of means. Keep in mind that, while Julia is fast, this is still a non-trivial task and will take some time, especially if you aren't explicitly using the new Julia engine to be introduced in Quarto 1.5. It is highly recommended to run the code in a Julia REPL instead of this notebook.
 
-## Graphing Results
+## Analyzing the Data
 
 ```{r setup}
+#| output: false
 library(tidyverse)
-df_means <- read.csv("means.csv")
-```
 
-```{r}
-df <- read.csv("means.csv") |>
+df <- read_csv("means.csv") |>
   group_by(Distribution) |>
   filter(
     Lower_Tail >= 0.02 & Lower_Tail <= 0.03,
     Upper_Tail >= 0.02 & Upper_Tail <= 0.03
-  ) |> 
+  ) |>
   filter(Sample_Size == min(Sample_Size)) |> # get the smallest sample size for each distribution
   select(Distribution, Skewness, Sampling_Skewness, Sample_Size) |>
   arrange(Skewness, Distribution)
 
-model <- lm(Skewness ~ sqrt(Sample_Size), df)
+df |>
+  knitr::kable(format = "markdown")
+```
 
+```{r Fitting the model}
+model <- lm(Skewness ~ sqrt(Sample_Size), df)
 df |>
   ggplot(aes(x = sqrt(Sample_Size), y = Skewness)) +
   # geom_abline(slope = sqrt(exp(1))/10, intercept = coef(model)[1], color = "red", linetype = "dashed") +
   geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed") +
   geom_line() +
-  labs(title = "Linear Relationship between Skewness and Square Root Sample Size", 
-       x = "Square Root of Sample Size", 
-       y = "Skewness")
+  labs(
+    title = "Linear Relationship between Skewness and Square Root Sample Size",
+    x = "Square Root of Sample Size",
+    y = "Skewness"
+  )
 
-print(df) # pander?
 print(model)
 ```
