@@ -143,10 +143,10 @@ df <- read_csv("means.csv") |>
 
 ft <- flextable(df) |>
   colformat_double(j = c("Skewness", "Sampling Skewness"), digits = 3) |>
-  font(fontname = "Trebuchet MS") |> 
+  font(fontname = "Trebuchet MS") |>
   autofit()
 
-save_as_image(ft, path = "table.png", res = 1000)
+save_as_image(ft, path = "Poster//table.png", res = 1000)
 ft
 ```
 
@@ -170,7 +170,7 @@ df |>
     axis.text = element_text(size = 12)
   )
 
-ggsave("Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 500)
+ggsave("Poster//Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 600)
 
 summary(model)
 ```
@@ -189,12 +189,13 @@ graphing = DataFrame(
     "LogNormal (0, 0.5) 50" => lognormal50
 )
 
-CSV.write("Graphing.csv", graphing)
+# warning: this will be a large file (~500MB) which is why it isn't in the repository
+CSV.write("graphing.csv", graphing) 
 ```
 
-```{r graphing}
+```{r graphing sampling distributions}
 #| message: false
-graphing <- read_csv("Graphing.csv")
+graphing <- read_csv("graphing.csv")
 # Iterate over columns of graphing
 for (col_name in names(graphing)) {
   dist <- str_sub(col_name, 1, -3)
@@ -210,7 +211,7 @@ for (col_name in names(graphing)) {
       linewidth = 1.25
     ) +
     labs(
-      title = paste0(dist, "Distribution with n =", n),
+      title = paste0(dist, "Distribution with n = ", n),
       x = "Sample Mean",
       y = "Frequency"
     ) +
@@ -221,11 +222,34 @@ for (col_name in names(graphing)) {
       axis.text = element_text(size = 12)
     )
 
-  ggsave(paste0(col_name, ".png"), width = 12, height = 6.75, dpi = 500)
+  ggsave(paste0("Poster//", col_name, ".png"), width = 12, height = 6.75, dpi = 600)
 }
 ```
 
-```{r}
+```{r graphing tails}
+read_csv("means.csv") |>
+  group_by(Distribution) |>
+  mutate(Distribution = paste(str_replace(Distribution, "\\{.*\\}", " "), round(Skewness, 2))) |>
+  ggplot(aes(x = `Sample Size`, color = Distribution)) +
+  geom_rect(
+    aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
+    fill = "grey",
+    linewidth = 0
+  ) +
+  geom_hline(yintercept = 0.025, linetype = "dashed", size = 1) +
+  geom_line(aes(y = `Upper Tail`), size = 1) +
+  geom_line(aes(y = `Lower Tail`), size = 1) +
+  labs(
+    title = "Upper and Lower Tail Weights of Sampling Distributions",
+    x = "Sample Size",
+    y = "Tail Weight"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 23),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
 
+ggsave("Poster//Tail_Weights.png", width = 12, height = 6.75, dpi = 600)
 ```
-
