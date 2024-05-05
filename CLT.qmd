@@ -1,39 +1,46 @@
 ---
 title: "Effects of Skewness on Sample Size in CLT"
-author: "Visruth Srimath Kandali. Beth Chance, California Polytechnic Department of Statistics"
-format: 
-    html:
-        df-print: kable
+author: "Visruth Srimath Kandali, Beth Chance, California Polytechnic Department of Statistics"
+format: html
 embed-resources: true
 # engine: julia
 ---
 
 ## Creating the Data
 
-```{julia Single distribution analysis}
+```{julia sampling distribution}
 #| output: false
 using Distributions, Random, DataFrames, CSV, StatsBase
 
-function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, μ::Number)
+function standardize(x̄, μ, σ, n::Int64)::Float64
+    (x̄ - μ) / (σ / sqrt(n))
+end
+
+function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int)::Vector{Float64}
     Random.seed!(0)
     sample_statistics = zeros(r)
     sample = zeros(n)
 
+    # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(d, sample)
-        if statistic == mean
-            sample_statistics[i] = statistic(sample)
-        elseif statistic == t_statistic
-            sample_statistics[i] = statistic(sample, μ)
-        end
+        sample_statistics[i] = statistic(sample)
     end
+
+    sample_statistics
+end
+```
+
+This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this `r` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis
+
+```{julia Single distribution analysis}
+#| output: false
+function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real)::Tuple{Float64,Float64,Float64}
+    sample_statistics = sampling_distribution(statistic, d, n, r)
 
     skewness = StatsBase.skewness(sample_statistics)
 
-    μ::Float64 = mean(d)
-    σ::Float64 = std(d)
-
-    z_scores = (sample_statistics .- μ) ./ (σ / sqrt(n))
+    z_scores = standardize.(sample_statistics, μ, σ, n)
     upper = sum(z_scores .>= 1.96) / r
     lower = sum(z_scores .<= -1.96) / r
 
@@ -41,13 +48,49 @@ function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, μ::
 end
 ```
 
-This function creates a sampling distribution, using the given distribution and its parameters. It does this `r` times to mitigate any concerns of natural sampling variability. The function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed by looking at z-scores more extreme than $\pm$ 1.96. The function then returns the tail weights along with the skewness of the sampling distribution.
+This function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed by looking at z-scores more extreme than $\pm$ 1.96. The function then returns the tail weights along with the skewness of the sampling distribution.
 
-```{julia Perform analysis on distributions}
+```{julia Analyzing multiple distributions}
 #| output: false
-function analyze_distributions(statistic::Function, r::Number)::DataFrame
+function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, distributions)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
+    # Some setup
+    results = DataFrame(
+        "Distribution" => String[],
+        "Skewness" => Float64[],
+        "Sample Size" => Int64[],
+        "Upper Tail" => Float64[],
+        "Lower Tail" => Float64[],
+        "Sampling Skewness" => Float64[],
+        "Population Mean" => Float64[],
+        "Population SD" => Float64[]
+    )
+    # Analyzing each distribution
+    @inbounds for d::Distribution in distributions
+        # # Getting population parameters
+        μ = mean(d)
+        σ = std(d)
+        skewness = StatsBase.skewness(d)
 
+        # # Analyzing each sample size
+        u = Threads.SpinLock() # lock to avoid data races
+        @inbounds Threads.@threads for n in sample_sizes
+            upper, lower, sample_skew = analysis(statistic, d, n, r, μ, σ)
+            Threads.lock(u) do
+                push!(results, (string(d), skewness, n, upper, lower, sample_skew, μ, σ))
+            end
+        end
+    end
+
+    results
+end
+```
+
+We chose to look at a variety of distributions with varying levels of skewness across a range of sample sizes. We selected these parameters to showcase the effects of skewness across differing distributions as well as the effects of skewness within the same distribution, and of course across sample size.
+
+```{julia Generate data}
+#| output: false
+function main()
     sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
         Gamma(16),
@@ -57,51 +100,25 @@ function analyze_distributions(statistic::Function, r::Number)::DataFrame
         LogNormal(0, 0.5),
         Gamma(1),
         Exponential(),
+        Gamma(0.64),
         LogNormal(0, 0.75)
     ]
+    # Compile
+    analyze_distributions(mean, 1, sample_sizes, distributions)
 
-    results = DataFrame(
-        Distribution=String[],
-        Skewness=Float64[],
-        Sample_Size=Int[],
-        Upper_Tail=Float64[],
-        Lower_Tail=Float64[],
-        Sampling_Skewness=Float64[],
-        Population_Mean=Float64[],
-        Population_SD=Float64[]
-    )
+    # ~10 minutes on a i7-12700h (10,000,000 repetitions used in the report)
+    # results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
 
-    @inbounds for d::Distribution in distributions
-        println("$(string(d))")
+    # ~1 minute on a i7-12700h
+    # results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
 
-        μ::Float64 = mean(d)
-        σ::Float64 = std(d)
-        skewness::Float64 = StatsBase.skewness(d)
+    results::DataFrame = analyze_distributions(mean, 10_000, sample_sizes, distributions)
 
-        u = Threads.SpinLock()
-        @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, sample_skew = analysis(statistic, d, n, r, μ)
-            Threads.lock(u) do
-                push!(results, (string(d), skewness, n, upper, lower, sample_skew, μ, σ))
-            end
-        end
-
-    end
-
-    sort!(results, [:Distribution, :Sample_Size])
+    CSV.write("means.csv", results)
+    nothing
 end
-```
 
-We chose to look at a variety of distributions with varying levels of skewness, which can be seen in `distributions`, and across various samples sizes as shown in `sample_sizes`. We selected these distributions to showcase the effects of skewness across differing distributions as well as the effects of skewness within the same distribution.
-
-```{julia Generate data}
-#| output: false
-# compiling the function
-analyze_distributions(mean, 1)
-
-# results = analyze_distributions(mean, 1_000_000)
-results = analyze_distributions(mean, 1000)
-CSV.write("means.csv", results)
+main()
 ```
 
 Here we use r = 1,000,000 repetitions to create our sampling distributions of means. Keep in mind that, while Julia is fast, this is still a non-trivial task and will take some time. It is highly recommended to run the code in a Julia REPL instead of this notebook.
@@ -125,8 +142,13 @@ df <- read_csv("means.csv") |>
   select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
   arrange(Skewness, Distribution)
 
-save_as_image(flextable(df), "table.png")
+ft <- flextable(df) |>
+  colformat_double(j = c("Skewness", "Sampling Skewness"), digits = 3) |>
+  autofit()
 
+save_as_image(ft, path = "table.png", res = 1000)
+
+ft
 ```
 
 ```{r Fitting the model}
@@ -141,8 +163,10 @@ df |>
     title = "Linear Relationship between Skewness and Square Root Sample Size",
     x = "Square Root of Sample Size",
     y = "Skewness"
-  )  +
+  ) +
   theme_bw()
+
+ggsave("Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 500)
 
 summary(model)
 ```
