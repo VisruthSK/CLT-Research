@@ -128,7 +128,6 @@ Here we use r = 1,000,000 repetitions to create our sampling distributions of me
 ```{r setup}
 #| message: false
 library(tidyverse)
-library(ggrepel)
 library(flextable)
 
 df <- read_csv("means.csv") |>
@@ -147,7 +146,6 @@ ft <- flextable(df) |>
   autofit()
 
 save_as_image(ft, path = "table.png", res = 1000)
-
 ft
 ```
 
@@ -158,7 +156,7 @@ df |>
   geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed", linewidth = 1.5) +
   geom_line(linewidth = 1.5) +
   geom_point(size = 3) +
-  geom_label_repel(seed = 0, nudge_x = 1, size = 5) +
+  ggrepel::geom_label_repel(seed = 0, nudge_x = 1, size = 5) +
   labs(
     title = "Linear Relationship between Skewness and Empirical Minimum Square Root Sample Size",
     x = "Square Root of Sample Size",
