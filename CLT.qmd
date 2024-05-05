@@ -110,10 +110,9 @@ Here we use r = 1,000,000 repetitions to create our sampling distributions of me
 
 ```{r setup}
 #| message: false
-library(dplyr)
-library(ggplot2)
-library(flextable)
+library(tidyverse)
 library(ggrepel)
+library(flextable)
 
 df <- read_csv("means.csv") |>
   group_by(Distribution) |>
@@ -128,14 +127,12 @@ df <- read_csv("means.csv") |>
 
 save_as_image(flextable(df), "table.png")
 
-df
 ```
 
 ```{r Fitting the model}
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
 df |>
   ggplot(aes(x = sqrt(`Sample Size`), y = Skewness, label = Distribution)) +
-  # geom_abline(slope = sqrt(exp(1))/10, intercept = coef(model)[1], color = "red", linetype = "dashed") +
   geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed") +
   geom_line() +
   geom_point() +

@@ -9,6 +9,7 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
     sample_statistics = zeros(r)
     sample = zeros(n)
 
+    # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(d, sample)
         sample_statistics[i] = statistic(sample)
@@ -29,21 +30,9 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     (upper, lower, skewness)
 end
 
-function analyze_distributions(statistic::Function, r::Int64)::DataFrame
+function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Int64[], distributions)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
-
     # Some setup
-    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
-    distributions = [
-        Gamma(16),
-        LogNormal(0, 0.25),
-        Gamma(4),
-        Gamma(2),
-        LogNormal(0, 0.5),
-        Gamma(1),
-        Exponential(),
-        LogNormal(0, 0.75)
-    ]
     results = DataFrame(
         "Distribution" => String[],
         "Skewness" => Float64[],
@@ -64,6 +53,7 @@ function analyze_distributions(statistic::Function, r::Int64)::DataFrame
         σ = std(d)
         skewness = StatsBase.skewness(d)
 
+        # Analyzing each sample size
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
             upper, lower, sample_skew = analysis(statistic, d, n, r, μ, σ)
@@ -78,13 +68,28 @@ function analyze_distributions(statistic::Function, r::Int64)::DataFrame
 end
 
 function main()
+    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
+    distributions = [
+        Gamma(16),
+        LogNormal(0, 0.25),
+        Gamma(4),
+        Gamma(2),
+        LogNormal(0, 0.5),
+        Gamma(1),
+        Exponential(),
+        Gamma(0.64),
+        LogNormal(0, 0.75)
+    ]
     # Compile
-    analyze_distributions(mean, 1)
+    analyze_distributions(mean, 1, sample_sizes, distributions)
+
+    # ~10 minutes on a i7-12700h (used in the report)
+    # results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
 
     # ~50 seconds on a i7-12700h
-    results::DataFrame = analyze_distributions(mean, 10_000_000)
-    CSV.write("means.csv", results)
+    results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
 
+    CSV.write("means.csv", results)
     nothing
 end
 
