@@ -84,13 +84,28 @@ function main()
     analyze_distributions(mean, 1, sample_sizes, distributions)
 
     # ~10 minutes on a i7-12700h (10,000,000 repetitions used in the report)
-    # results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
+    results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
 
     # ~1 minute on a i7-12700h
-    results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
+    # results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
 
     CSV.write("means.csv", results)
-    nothing
+end
+
+function graphing()
+    exponential30 = sampling_distribution(mean, Exponential(), 30, 10_000_000)
+    gamma30 = sampling_distribution(mean, Gamma(2), 30, 10_000_000)
+    lognormal50 = sampling_distribution(mean, LogNormal(0, 0.5), 50, 10_000_000)
+
+    graphing = DataFrame(
+        "Exponential 30" => exponential30,
+        "Gamma (2, 1) 30" => gamma30,
+        "LogNormal (0, 0.5) 50" => lognormal50
+    )
+
+    # warning: this will be a large file (~500MB) which is why "graphing.csv" isn't in the repository
+    CSV.write("graphing.csv", graphing)
 end
 
 main()
+graphing()

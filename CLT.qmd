@@ -1,6 +1,6 @@
 ---
 title: "Effects of Skewness on Sample Size in CLT"
-author: "Visruth Srimath Kandali, Beth Chance, California Polytechnic Department of Statistics"
+author: "Visruth Srimath Kandali, Beth Chance, California Polytechnic San Luis Obispo Department of Statistics"
 format: html
 embed-resources: true
 # engine: julia
@@ -31,7 +31,7 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
 end
 ```
 
-This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this `r` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis
+This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this \`r\`\` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis
 
 ```{julia Single distribution analysis}
 #| output: false
@@ -110,9 +110,7 @@ function main()
     # results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
 
     # ~1 minute on a i7-12700h
-    # results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
-
-    results::DataFrame = analyze_distributions(mean, 10_000, sample_sizes, distributions)
+    results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
 
     CSV.write("means.csv", results)
     nothing
@@ -146,7 +144,7 @@ ft <- flextable(df) |>
   font(fontname = "Trebuchet MS") |>
   autofit()
 
-save_as_image(ft, path = "Poster//table.png", res = 1000)
+save_as_image(ft, path = "Poster//table.png", res = 2000)
 ft
 ```
 
@@ -170,7 +168,7 @@ df |>
     axis.text = element_text(size = 12)
   )
 
-ggsave("Poster//Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 600)
+ggsave("Poster//Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 1000)
 
 summary(model)
 ```
@@ -189,11 +187,11 @@ graphing = DataFrame(
     "LogNormal (0, 0.5) 50" => lognormal50
 )
 
-# warning: this will be a large file (~500MB) which is why it isn't in the repository
+# warning: this will be a large file (~500MB) which is why "graphing.csv" isn't in the repository
 CSV.write("graphing.csv", graphing) 
 ```
 
-```{r graphing sampling distributions}
+```{r Graphing sampling distributions}
 #| message: false
 graphing <- read_csv("graphing.csv")
 # Iterate over columns of graphing
@@ -221,12 +219,14 @@ for (col_name in names(graphing)) {
       axis.title = element_text(size = 17),
       axis.text = element_text(size = 12)
     )
-
-  ggsave(paste0("Poster//", col_name, ".png"), width = 12, height = 6.75, dpi = 600)
+  
+  print(last_plot())
+  
+  ggsave(paste0("Poster//", col_name, ".png"), width = 12, height = 6.75, dpi = 1000)
 }
 ```
 
-```{r graphing tails}
+```{r Graphing tails}
 read_csv("means.csv") |>
   group_by(Distribution) |>
   mutate(Distribution = paste(str_replace(Distribution, "\\{.*\\}", " "), round(Skewness, 2))) |>
@@ -236,9 +236,9 @@ read_csv("means.csv") |>
     fill = "grey",
     linewidth = 0
   ) +
-  geom_hline(yintercept = 0.025, linetype = "dashed", size = 1) +
-  geom_line(aes(y = `Upper Tail`), size = 1) +
-  geom_line(aes(y = `Lower Tail`), size = 1) +
+  geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
+  geom_line(aes(y = `Upper Tail`), linewidth = 1) +
+  geom_line(aes(y = `Lower Tail`), linewidth = 1) +
   labs(
     title = "Upper and Lower Tail Weights of Sampling Distributions",
     x = "Sample Size",
@@ -251,5 +251,5 @@ read_csv("means.csv") |>
     axis.text = element_text(size = 12)
   )
 
-ggsave("Poster//Tail_Weights.png", width = 12, height = 6.75, dpi = 600)
+ggsave("Poster//Tail_Weights.png", width = 12, height = 6.75, dpi = 1000)
 ```
