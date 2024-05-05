@@ -155,36 +155,74 @@ ft
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
 df |>
   ggplot(aes(x = sqrt(`Sample Size`), y = Skewness, label = Distribution)) +
-  geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed") +
-  geom_line() +
-  geom_point() +
-  geom_label_repel() +
+  geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed", linewidth = 1.5) +
+  geom_line(linewidth = 1.5) +
+  geom_point(size = 3) +
+  geom_label_repel(seed = 0, nudge_x = 1, size = 5) +
   labs(
-    title = "Linear Relationship between Skewness and Square Root Sample Size",
+    title = "Linear Relationship between Skewness and Empirical Minimum Square Root Sample Size",
     x = "Square Root of Sample Size",
     y = "Skewness"
   ) +
-  theme_bw()
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 23),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
 
 ggsave("Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 500)
 
 summary(model)
 ```
 
+## Generating Some Graphs
+
+```{julia Generating graphing data}
+#| output: false
+exponential30 = sampling_distribution(mean, Exponential(), 30, 10_000_000)
+gamma30 = sampling_distribution(mean, Gamma(2), 30, 10_000_000)
+lognormal50 = sampling_distribution(mean, LogNormal(0, 0.5), 50, 10_000_000)
+exponential150 = sampling_distribution(mean, Exponential(), 150, 10_000_000)
+
+graphing = DataFrame(
+    "Exponential30" => exponential30,
+    "Exponential150" => exponential150,
+    "Gamma30" => gamma30,
+    "LogNormal50" => lognormal50
+)
+
+CSV.write("Graphing.csv", graphing)
+```
+
 ```{r graphing}
-set.seed(0)
+graphing <- read_csv("Graphing.csv")
+# Iterate over columns of graphing
+for (col_name in names(graphing)) {
+  dist <- str_extract(col_name, "^[A-Za-z]+")
+  n <- as.numeric(str_extract(col_name, "\\d+"))
 
-# Generate random values from a normal distribution
-data <- rexp(1000)
+  ggplot(graphing, aes(x = .data[[col_name]])) +
+    # geom_histogram(bins = 200, aes(y = after_stat(density))) +
+    geom_density(alpha = 0.7, fill = "grey") +
+    stat_function(
+      fun = dnorm,
+      args = list(mean = mean(graphing[[col_name]]), sd = sd(graphing[[col_name]])),
+      color = "blue",
+      size = 1.25
+    ) +
+    labs(
+      title = paste(dist, "Distribution with n =", n),
+      x = "Sample Mean",
+      y = "Frequency"
+    ) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 23),
+      axis.title = element_text(size = 17),
+      axis.text = element_text(size = 12)
+    )
 
-df <- data.frame(value = data)
-
-# Create a histogram using ggplot2
-ggplot(data = df, aes(x = value)) +
-  geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black", aes(y = after_stat(density))) +
-  labs(
-    title = "Histogram of Random Values from Exponential Distribution",
-    x = "Values",
-    y = "Density"
-  )
+  ggsave(paste0(dist, " ", n, ".png"), width = 15, height = 8.5, dpi = 500)
+}
 ```
