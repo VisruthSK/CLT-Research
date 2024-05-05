@@ -110,35 +110,43 @@ Here we use r = 1,000,000 repetitions to create our sampling distributions of me
 
 ```{r setup}
 #| message: false
-library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(flextable)
+library(ggrepel)
 
 df <- read_csv("means.csv") |>
   group_by(Distribution) |>
+  mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
   filter(
-    Lower_Tail >= 0.02 & Lower_Tail <= 0.03,
-    Upper_Tail >= 0.02 & Upper_Tail <= 0.03
+    `Lower Tail` >= 0.02 & `Lower Tail` <= 0.03,
+    `Upper Tail` >= 0.02 & `Upper Tail` <= 0.03
   ) |>
-  filter(Sample_Size == min(Sample_Size)) |> # get the smallest sample size for each distribution
-  select(Distribution, Skewness, Sampling_Skewness, Sample_Size) |>
+  filter(`Sample Size` == min(`Sample Size`)) |> # get the smallest sample size for each distribution
+  select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
   arrange(Skewness, Distribution)
+
+save_as_image(flextable(df), "table.png")
 
 df
 ```
 
 ```{r Fitting the model}
-model <- lm(Skewness ~ sqrt(Sample_Size), df)
+model <- lm(Skewness ~ sqrt(`Sample Size`), df)
 df |>
-  ggplot(aes(x = sqrt(Sample_Size), y = Skewness)) +
+  ggplot(aes(x = sqrt(`Sample Size`), y = Skewness, label = Distribution)) +
   # geom_abline(slope = sqrt(exp(1))/10, intercept = coef(model)[1], color = "red", linetype = "dashed") +
   geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed") +
   geom_line() +
+  geom_point() +
+  geom_label_repel() +
   labs(
     title = "Linear Relationship between Skewness and Square Root Sample Size",
     x = "Square Root of Sample Size",
     y = "Skewness"
-  )
+  )  +
+  theme_bw()
 
-# print(model)
 summary(model)
 ```
 
@@ -153,7 +161,9 @@ df <- data.frame(value = data)
 # Create a histogram using ggplot2
 ggplot(data = df, aes(x = value)) +
   geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black", aes(y = after_stat(density))) +
-  labs(title = "Histogram of Random Values from Exponential Distribution",
-       x = "Values",
-       y = "Density")
+  labs(
+    title = "Histogram of Random Values from Exponential Distribution",
+    x = "Values",
+    y = "Density"
+  )
 ```

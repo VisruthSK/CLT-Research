@@ -4,22 +4,24 @@ function t_statistic(data::Vector, μ::Float64)
     (mean(data) - μ) / (std(data) / sqrt(length(data)))
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int64, r::Int64, μ::Float64, σ::Float64)::{Float64,Float64,Float64}
-    # Setting some basic variables
+function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int)::Vector{Float64}
     Random.seed!(0)
     sample_statistics = zeros(r)
     sample = zeros(n)
 
-    # Create r samples of size n and store their statistics
     @inbounds for i in 1:r
         rand!(d, sample)
         sample_statistics[i] = statistic(sample)
     end
 
-    # Getting the skewness of the sampling distribution
+    sample_statistics
+end
+
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real)::Tuple{Float64,Float64,Float64}
+    sample_statistics = sampling_distribution(statistic, d, n, r)
+
     skewness = StatsBase.skewness(sample_statistics)
 
-    # Standardizing and calculating the proportion of sample statistics that fall in the tails
     z_scores = (sample_statistics .- μ) ./ (σ ./ sqrt(n))
     upper = sum(z_scores .>= 1.96) / r
     lower = sum(z_scores .<= -1.96) / r
@@ -43,14 +45,14 @@ function analyze_distributions(statistic::Function, r::Int64)::DataFrame
         LogNormal(0, 0.75)
     ]
     results = DataFrame(
-        Distribution=String[],
-        Skewness=Float64[],
-        Sample_Size=Int64[],
-        Upper_Tail=Float64[],
-        Lower_Tail=Float64[],
-        Sampling_Skewness=Float64[],
-        Population_Mean=Float64[],
-        Population_SD=Float64[]
+        "Distribution" => String[],
+        "Skewness" => Float64[],
+        "Sample Size" => Int64[],
+        "Upper Tail" => Float64[],
+        "Lower Tail" => Float64[],
+        "Sampling Skewness" => Float64[],
+        "Population Mean" => Float64[],
+        "Population SD" => Float64[]
     )
 
     # Analyzing each distribution
@@ -72,7 +74,7 @@ function analyze_distributions(statistic::Function, r::Int64)::DataFrame
 
     end
 
-    sort!(results, [:Distribution, :Sample_Size])
+    sort!(results, [:Distribution, :"Sample Size"])
 end
 
 function main()
@@ -80,8 +82,10 @@ function main()
     analyze_distributions(mean, 1)
 
     # ~50 seconds on a i7-12700h
-    results = analyze_distributions(mean, 1_000_000)
+    results::DataFrame = analyze_distributions(mean, 10_000_000)
     CSV.write("means.csv", results)
+
+    nothing
 end
 
 main()
