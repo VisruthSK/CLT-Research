@@ -175,7 +175,7 @@ summary(model)
 
 ## Generating Some Graphs
 
-```{julia Generating Exponential graphing data}
+```{julia Generating Exponential data for graphing}
 #| output: false
 d = Exponential()
 μ = mean(d)
@@ -196,6 +196,7 @@ graphing = DataFrame(
     "Exponential 150 Z-Scores" => exponential150std
 )
 
+# Warning: this produces a large file (~700MB) which is why you will not find graphing.csv in the repository
 CSV.write("graphing.csv", graphing)
 ```
 
@@ -204,34 +205,9 @@ CSV.write("graphing.csv", graphing)
 graphing <- read_csv("graphing.csv") |>
   select("Exponential Z-Scores", "Exponential 150 Z-Scores")
 
-upper <- sum(graphing$`Exponential Z-Scores` >= 1.96) / 1000000
-lower <- sum(graphing$`Exponential Z-Scores` <= -1.96) / 1000000
-
-main <- ggplot(graphing, aes(x = `Exponential Z-Scores`)) +
-  geom_histogram(bins = 100, aes(y = after_stat(density))) +
-  stat_function(
-    fun = dnorm,
-    args = list(mean = mean(graphing[[1]]), sd = sd(graphing[[1]])),
-    color = "blue",
-    linewidth = 1.25
-  ) +
-  labs(
-    title = "Sampling Distribution of Standardized Means for Exponential Population with n = 30",
-    x = "Z Score",
-    y = "Frequency"
-  ) +
-  theme_bw() +
-  theme(
-    plot.title = element_text(size = 20),
-    axis.title = element_text(size = 17),
-    axis.text = element_text(size = 12)
-  ) +
-  geom_vline(xintercept = 1.96, linetype = "dashed", color = "blue") +
-  geom_vline(xintercept = -1.96, linetype = "dashed", color = "blue")
-
+# Create exponential population plot
 x <- seq(0, 5, length.out = 100)
 y <- dexp(x, rate = 1)
-
 sub <- ggplot() +
   geom_line(aes(x, y)) +
   labs(
@@ -245,9 +221,43 @@ sub <- ggplot() +
     axis.ticks = element_blank()
   )
 
-combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
+for (col_name in colnames(graphing)) {
+  # Determine sample size
+  sample_size <- ifelse(grepl("150", col_name), "n = 150", "n = 30")
 
-ggsave(paste0("Poster//Exponential.png"), width = 12, height = 6.75, dpi = 1000)
+  # Calculate upper and lower bounds
+  upper <- sum(graphing[[col_name]] >= 1.96) / 1000000
+  lower <- sum(graphing[[col_name]] <= -1.96) / 1000000
+
+  # Main plot
+  main <- ggplot(graphing, aes(x = .data[[col_name]])) +
+    geom_histogram(bins = 100, aes(y = after_stat(density))) +
+    stat_function(
+      fun = dnorm,
+      args = list(mean = mean(graphing[[col_name]]), sd = sd(graphing[[col_name]])),
+      color = "blue",
+      linewidth = 1.25
+    ) +
+    geom_vline(xintercept = 1.96, linetype = "dashed", color = "blue") +
+    geom_vline(xintercept = -1.96, linetype = "dashed", color = "blue") +
+    labs(
+      title = paste("Sampling Distribution of Standardized Means for", sample_size),
+      x = "Z Score",
+      y = "Frequency"
+    ) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 20),
+      axis.title = element_text(size = 17),
+      axis.text = element_text(size = 12)
+    )
+
+  # Combine plots
+  combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
+
+  # Save the plot
+  ggsave(paste0("Poster//", col_name, ".png"), plot = combined, width = 12, height = 6.75, dpi = 1000)
+}
 ```
 
 ```{r Graphing tails}
@@ -263,6 +273,8 @@ read_csv("means.csv") |>
   geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
   geom_line(aes(y = `Upper Tail`), linewidth = 1) +
   geom_line(aes(y = `Lower Tail`), linewidth = 1) +
+  geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) +
+  annotate("text", x = 40, y = 0.04, label = "n = 30", hjust = 0, size = 5, color = "black") +
   labs(
     title = "Upper and Lower Tail Weights of Sampling Distributions",
     x = "Sample Size",

@@ -18,9 +18,7 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
     sample_statistics
 end
 
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real)::Tuple{Float64,Float64,Float64}
-    sample_statistics = sampling_distribution(statistic, d, n, r)
-
+function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64}
     skewness = StatsBase.skewness(sample_statistics)
 
     z_scores = standardize.(sample_statistics, μ, σ, n)
@@ -93,17 +91,25 @@ function main()
 end
 
 function graphing()
-    exponential30 = sampling_distribution(mean, Exponential(), 30, 10_000_000)
-    gamma30 = sampling_distribution(mean, Gamma(2), 30, 10_000_000)
-    lognormal50 = sampling_distribution(mean, LogNormal(0, 0.5), 50, 10_000_000)
+    d = Exponential()
+    μ = mean(d)
+    σ = std(d)
+    n = 30
+
+    exponential30 = sampling_distribution(mean, d, n, 10_000_000)
+    exponential30std = standardize.(exponential30, μ, σ, n)
+
+    n = 150
+    exponential150 = sampling_distribution(mean, d, n, 10_000_000)
+    exponential150std = standardize.(exponential150, μ, σ, n)
 
     graphing = DataFrame(
-        "Exponential 30" => exponential30,
-        "Gamma (2, 1) 30" => gamma30,
-        "LogNormal (0, 0.5) 50" => lognormal50
+        "Exponential" => exponential30,
+        "Exponential Z-Scores" => exponential30std,
+        "Exponential 150" => exponential150,
+        "Exponential 150 Z-Scores" => exponential150std
     )
 
-    # warning: this will be a large file (~500MB) which is why "graphing.csv" isn't in the repository
     CSV.write("graphing.csv", graphing)
 end
 
