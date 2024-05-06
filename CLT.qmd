@@ -35,7 +35,7 @@ This function creates a sampling distribution, using the given distribution and 
 
 ```{julia Single distribution analysis}
 #| output: false
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real)::Tuple{Float64,Float64,Float64}
+function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64}
     sample_statistics = sampling_distribution(statistic, d, n, r)
 
     skewness = StatsBase.skewness(sample_statistics)
@@ -175,55 +175,79 @@ summary(model)
 
 ## Generating Some Graphs
 
-```{julia Generating graphing data}
+```{julia Generating Exponential graphing data}
 #| output: false
-exponential30 = sampling_distribution(mean, Exponential(), 30, 10_000_000)
-gamma30 = sampling_distribution(mean, Gamma(2), 30, 10_000_000)
-lognormal50 = sampling_distribution(mean, LogNormal(0, 0.5), 50, 10_000_000)
+d = Exponential()
+μ = mean(d)
+σ = std(d)
+n = 30
+
+exponential30 = sampling_distribution(mean, d, n, 10_000_000)
+exponential30std = standardize.(exponential30, μ, σ, n)
+
+n = 150
+exponential150 = sampling_distribution(mean, d, n, 10_000_000)
+exponential150std = standardize.(exponential150, μ, σ, n)
 
 graphing = DataFrame(
-    "Exponential 30" => exponential30,
-    "Gamma (2, 1) 30" => gamma30,
-    "LogNormal (0, 0.5) 50" => lognormal50
+    "Exponential" => exponential30,
+    "Exponential Z-Scores" => exponential30std,
+    "Exponential 150" => exponential150,
+    "Exponential 150 Z-Scores" => exponential150std
 )
 
-# warning: this will be a large file (~500MB) which is why "graphing.csv" isn't in the repository
-CSV.write("graphing.csv", graphing) 
+CSV.write("graphing.csv", graphing)
 ```
 
 ```{r Graphing sampling distributions}
 #| message: false
-graphing <- read_csv("graphing.csv")
-# Iterate over columns of graphing
-for (col_name in names(graphing)) {
-  dist <- str_sub(col_name, 1, -3)
-  n <- str_sub(col_name, -2, -1)
+graphing <- read_csv("graphing.csv") |>
+  select("Exponential Z-Scores", "Exponential 150 Z-Scores")
 
-  ggplot(graphing, aes(x = .data[[col_name]])) +
-    # geom_histogram(bins = 200, aes(y = after_stat(density))) +
-    geom_density(alpha = 0.7, fill = "grey") +
-    stat_function(
-      fun = dnorm,
-      args = list(mean = mean(graphing[[col_name]]), sd = sd(graphing[[col_name]])),
-      color = "blue",
-      linewidth = 1.25
-    ) +
-    labs(
-      title = paste0(dist, "Distribution with n = ", n),
-      x = "Sample Mean",
-      y = "Frequency"
-    ) +
-    theme_bw() +
-    theme(
-      plot.title = element_text(size = 23),
-      axis.title = element_text(size = 17),
-      axis.text = element_text(size = 12)
-    )
-  
-  print(last_plot())
-  
-  ggsave(paste0("Poster//", col_name, ".png"), width = 12, height = 6.75, dpi = 1000)
-}
+upper <- sum(graphing$`Exponential Z-Scores` >= 1.96) / 1000000
+lower <- sum(graphing$`Exponential Z-Scores` <= -1.96) / 1000000
+
+main <- ggplot(graphing, aes(x = `Exponential Z-Scores`)) +
+  geom_histogram(bins = 100, aes(y = after_stat(density))) +
+  stat_function(
+    fun = dnorm,
+    args = list(mean = mean(graphing[[1]]), sd = sd(graphing[[1]])),
+    color = "blue",
+    linewidth = 1.25
+  ) +
+  labs(
+    title = "Sampling Distribution of Standardized Means for Exponential Population with n = 30",
+    x = "Z Score",
+    y = "Frequency"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  ) +
+  geom_vline(xintercept = 1.96, linetype = "dashed", color = "blue") +
+  geom_vline(xintercept = -1.96, linetype = "dashed", color = "blue")
+
+x <- seq(0, 5, length.out = 100)
+y <- dexp(x, rate = 1)
+
+sub <- ggplot() +
+  geom_line(aes(x, y)) +
+  labs(
+    title = "Exponential Population with Rate = 1"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 12),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
+
+ggsave(paste0("Poster//Exponential.png"), width = 12, height = 6.75, dpi = 1000)
 ```
 
 ```{r Graphing tails}
