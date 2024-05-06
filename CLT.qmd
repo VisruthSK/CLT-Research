@@ -190,20 +190,20 @@ exponential150 = sampling_distribution(mean, d, n, 10_000_000)
 exponential150std = standardize.(exponential150, μ, σ, n)
 
 graphing = DataFrame(
-    "Exponential" => exponential30,
-    "Exponential Z-Scores" => exponential30std,
+    "Exponential 30" => exponential30,
+    "Exponential 30 Z-Scores" => exponential30std,
     "Exponential 150" => exponential150,
     "Exponential 150 Z-Scores" => exponential150std
 )
 
-# Warning: this produces a large file (~700MB) which is why you will not find graphing.csv in the repository
+# Warning: this produces a large file which is why you will not find graphing.csv in the repository
 CSV.write("graphing.csv", graphing)
 ```
 
 ```{r Graphing sampling distributions}
 #| message: false
 graphing <- read_csv("graphing.csv") |>
-  select("Exponential Z-Scores", "Exponential 150 Z-Scores")
+  select("Exponential 30 Z-Scores", "Exponential 150 Z-Scores")
 
 # Create exponential population plot
 x <- seq(0, 5, length.out = 100)
@@ -222,14 +222,11 @@ sub <- ggplot() +
   )
 
 for (col_name in colnames(graphing)) {
-  # Determine sample size
-  sample_size <- ifelse(grepl("150", col_name), "n = 150", "n = 30")
+  sample_size <- str_extract(col_name, "\\d+")
 
-  # Calculate upper and lower bounds
-  upper <- sum(graphing[[col_name]] >= 1.96) / 1000000
-  lower <- sum(graphing[[col_name]] <= -1.96) / 1000000
+  upper <- sum(graphing[[col_name]] >= 1.96) / length(graphing[[col_name]])
+  lower <- sum(graphing[[col_name]] <= -1.96) / length(graphing[[col_name]])
 
-  # Main plot
   main <- ggplot(graphing, aes(x = .data[[col_name]])) +
     geom_histogram(bins = 100, aes(y = after_stat(density))) +
     stat_function(
@@ -239,9 +236,37 @@ for (col_name in colnames(graphing)) {
       linewidth = 1.25
     ) +
     geom_vline(xintercept = 1.96, linetype = "dashed", color = "blue") +
+    annotate("text",
+      x = 2.5,
+      y = 0.1,
+      label = "1.96 SDs",
+      color = "blue",
+      size = 5
+    ) +
+    annotate("text",
+      x = -2.5,
+      y = 0.1,
+      label = "-1.96 SDs",
+      color = "blue",
+      size = 5
+    ) +
+    annotate("text",
+      x = 3,
+      y = 0.05,
+      label = round(upper, 3),
+      color = "black",
+      size = 5
+    ) +
+    annotate("text",
+      x = -3,
+      y = 0.05,
+      label = round(lower, 3),
+      color = "black",
+      size = 5
+    ) +
     geom_vline(xintercept = -1.96, linetype = "dashed", color = "blue") +
     labs(
-      title = paste("Sampling Distribution of Standardized Means for", sample_size),
+      title = paste("Sampling Distribution of Standardized Means for n =", sample_size),
       x = "Z Score",
       y = "Frequency"
     ) +
@@ -252,18 +277,19 @@ for (col_name in colnames(graphing)) {
       axis.text = element_text(size = 12)
     )
 
-  # Combine plots
   combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
 
-  # Save the plot
   ggsave(paste0("Poster//", col_name, ".png"), plot = combined, width = 12, height = 6.75, dpi = 1000)
 }
 ```
 
 ```{r Graphing tails}
 read_csv("means.csv") |>
-  group_by(Distribution) |>
-  mutate(Distribution = paste(str_replace(Distribution, "\\{.*\\}", " "), round(Skewness, 2))) |>
+  mutate(
+    Distribution = paste(str_replace(Distribution, "\\{.*\\}", " "), round(Skewness, 2)),
+    Distribution = factor(Distribution, levels = unique(Distribution[order(-Skewness)]))
+  ) |>
+  arrange(Skewness) |>
   ggplot(aes(x = `Sample Size`, color = Distribution)) +
   geom_rect(
     aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
@@ -286,6 +312,7 @@ read_csv("means.csv") |>
     axis.title = element_text(size = 17),
     axis.text = element_text(size = 12)
   )
+
 
 ggsave("Poster//Tail_Weights.png", width = 12, height = 6.75, dpi = 1000)
 ```
