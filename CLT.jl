@@ -6,12 +6,13 @@ end
 
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int)::Vector{Float64}
     Random.seed!(0)
+    # Preallocating vectors for speed
     sample_statistics = zeros(r)
     sample = zeros(n)
 
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
-        rand!(d, sample)
+        rand!(d, sample) # in-place to reduce memory allocation
         sample_statistics[i] = statistic(sample)::Float64
     end
 
@@ -22,8 +23,8 @@ function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real
     skewness = StatsBase.skewness(sample_statistics)
     kurtosis = StatsBase.kurtosis(sample_statistics)
 
+    # Standardizing the values to look at tail probabilities
     z_scores = standardize.(sample_statistics, μ, σ, n)
-
     upper = sum(z_scores .>= 1.96) / r
     lower = sum(z_scores .<= -1.96) / r
 
@@ -32,7 +33,7 @@ end
 
 function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, distributions)::DataFrame
     println("Analyzing distributions with $(r) repetitions")
-    # Some setup
+    # Setting up the results we're interested in
     results = DataFrame(
         "Distribution" => String[],
         "Skewness" => Float64[],
@@ -96,6 +97,7 @@ function graphing(r)
     σ = std(d)
     n = 30
 
+    # Creating sampling distributions
     exponential30 = sampling_distribution(mean, d, n, r)
     exponential30std = standardize.(exponential30, μ, σ, n)
 
