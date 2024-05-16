@@ -1,7 +1,7 @@
 using Distributions, Random, DataFrames, CSV, StatsBase
 
-function standardize(x̄, μ, σ, n::Int64)::Float64
-    (x̄ - μ) / (σ / sqrt(n))
+function standardize(x, μ, σ, n::Int64)::Float64
+    (x - μ) / (σ / sqrt(n))
 end
 
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int)::Vector{Float64}
@@ -12,20 +12,22 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(d, sample)
-        sample_statistics[i] = statistic(sample)
+        sample_statistics[i] = statistic(sample)::Float64
     end
 
     sample_statistics
 end
 
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64}
+function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64,Float64}
     skewness = StatsBase.skewness(sample_statistics)
+    kurtosis = StatsBase.kurtosis(sample_statistics)
 
     z_scores = standardize.(sample_statistics, μ, σ, n)
+
     upper = sum(z_scores .>= 1.96) / r
     lower = sum(z_scores .<= -1.96) / r
 
-    (upper, lower, skewness)
+    (upper, lower, skewness, kurtosis)
 end
 
 function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, distributions)::DataFrame
@@ -38,6 +40,7 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
         "Upper Tail" => Float64[],
         "Lower Tail" => Float64[],
         "Sampling Skewness" => Float64[],
+        "Sampling Kurtosis" => Float64[],
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
     )
@@ -54,9 +57,9 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
         # Analyzing each sample size
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, sample_skew = analysis(statistic, d, n, r, μ, σ)
+            upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ)
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, upper, lower, sample_skew, μ, σ))
+                push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
             end
         end
 
@@ -65,7 +68,7 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
     sort!(results, [:Distribution, :"Sample Size"])
 end
 
-function main()
+function main(r)
     sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
         Gamma(16),
@@ -81,26 +84,23 @@ function main()
     # Compile
     analyze_distributions(mean, 1, sample_sizes, distributions)
 
-    # ~10 minutes on a i7-12700h (10,000,000 repetitions used in the report)
-    results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
-
-    # ~1 minute on a i7-12700h
-    # results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
+    # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
+    results::DataFrame = analyze_distributions(mean, r, sample_sizes, distributions)
 
     CSV.write("means.csv", results)
 end
 
-function graphing()
+function graphing(r)
     d = Exponential()
     μ = mean(d)
     σ = std(d)
     n = 30
 
-    exponential30 = sampling_distribution(mean, d, n, 10_000_000)
+    exponential30 = sampling_distribution(mean, d, n, r)
     exponential30std = standardize.(exponential30, μ, σ, n)
 
     n = 150
-    exponential150 = sampling_distribution(mean, d, n, 10_000_000)
+    exponential150 = sampling_distribution(mean, d, n, r)
     exponential150std = standardize.(exponential150, μ, σ, n)
 
     graphing = DataFrame(
@@ -113,5 +113,5 @@ function graphing()
     CSV.write("graphing.csv", graphing)
 end
 
-main()
-graphing()
+main(10_000_000)
+graphing(10_000_000)

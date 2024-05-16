@@ -1,9 +1,9 @@
 ---
-title: "Effects of Skewness on Sample Size in CLT"
+title: "The Effects of Skewness on the Central Limit Theorem"
 author: "Visruth Srimath Kandali, Beth Chance, California Polytechnic San Luis Obispo Department of Statistics"
 format: html
 embed-resources: true
-# engine: julia
+# engine: julia # min Quarto 1.5
 ---
 
 ## Creating the Data
@@ -12,8 +12,8 @@ embed-resources: true
 #| output: false
 using Distributions, Random, DataFrames, CSV, StatsBase
 
-function standardize(x̄, μ, σ, n::Int64)::Float64
-    (x̄ - μ) / (σ / sqrt(n))
+function standardize(x, μ, σ, n::Int64)::Float64
+    (x - μ) / (σ / sqrt(n))
 end
 
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int)::Vector{Float64}
@@ -24,31 +24,31 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(d, sample)
-        sample_statistics[i] = statistic(sample)
+        sample_statistics[i] = statistic(sample)::Float64
     end
 
     sample_statistics
 end
 ```
 
-This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this \`r\`\` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis
+This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this \`r\` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis.
 
 ```{julia Single distribution analysis}
 #| output: false
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64}
-    sample_statistics = sampling_distribution(statistic, d, n, r)
-
+function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64,Float64}
     skewness = StatsBase.skewness(sample_statistics)
+    kurtosis = StatsBase.kurtosis(sample_statistics)
 
     z_scores = standardize.(sample_statistics, μ, σ, n)
+
     upper = sum(z_scores .>= 1.96) / r
     lower = sum(z_scores .<= -1.96) / r
 
-    (upper, lower, skewness)
+    (upper, lower, skewness, kurtosis)
 end
 ```
 
-This function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed by looking at z-scores more extreme than $\pm$ 1.96. The function then returns the tail weights along with the skewness of the sampling distribution.
+This function then finds the upper and lower tails of this sampling distribution under the assumption that it is normally distributed by looking at z-scores more extreme than $\pm$ 1.96. The function returns the tail weights along with the skewness and kurtosis of the sampling distribution.
 
 ```{julia Analyzing multiple distributions}
 #| output: false
@@ -62,35 +62,38 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
         "Upper Tail" => Float64[],
         "Lower Tail" => Float64[],
         "Sampling Skewness" => Float64[],
+        "Sampling Kurtosis" => Float64[],
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
     )
+
     # Analyzing each distribution
     @inbounds for d::Distribution in distributions
-        # # Getting population parameters
+        println(string(d))
+
+        # Getting population parameters
         μ = mean(d)
         σ = std(d)
         skewness = StatsBase.skewness(d)
 
-        # # Analyzing each sample size
+        # Analyzing each sample size
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, sample_skew = analysis(statistic, d, n, r, μ, σ)
+            upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ)
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, upper, lower, sample_skew, μ, σ))
+                push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
             end
         end
+
     end
 
-    results
+    sort!(results, [:Distribution, :"Sample Size"])
 end
 ```
 
-We chose to look at a variety of distributions with varying levels of skewness across a range of sample sizes. We selected these parameters to showcase the effects of skewness across differing distributions as well as the effects of skewness within the same distribution, and of course across sample size.
-
 ```{julia Generate data}
 #| output: false
-function main()
+function main(r)
     sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
     distributions = [
         Gamma(16),
@@ -106,25 +109,19 @@ function main()
     # Compile
     analyze_distributions(mean, 1, sample_sizes, distributions)
 
-    # ~10 minutes on a i7-12700h (10,000,000 repetitions used in the report)
-    # results::DataFrame = analyze_distributions(mean, 10_000_000, sample_sizes, distributions)
-
-    # ~1 minute on a i7-12700h
-    results::DataFrame = analyze_distributions(mean, 1_000_000, sample_sizes, distributions)
+    # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
+    results::DataFrame = analyze_distributions(mean, r, sample_sizes, distributions)
 
     CSV.write("means.csv", results)
-    nothing
 end
-
-main()
+main() # remove this if you want to render the document but already have data
 ```
 
-Here we use r = 1,000,000 repetitions to create our sampling distributions of means. Keep in mind that, while Julia is fast, this is still a non-trivial task and will take some time. It is highly recommended to run the code in a Julia REPL instead of this notebook.
+We used r = 10,000,000 repetitions to create our sampling distributions of means (means.csv). Keep in mind that, while Julia is fast, this is a non-trivial task and will take some time. It is highly recommended to run the code in a Julia REPL instead of this notebook.
 
 ## Analyzing the Data
 
 ```{r setup}
-#| message: false
 library(tidyverse)
 library(flextable)
 
@@ -147,6 +144,8 @@ ft <- flextable(df) |>
 save_as_image(ft, path = "Poster//table.png", res = 2000)
 ft
 ```
+
+Now that we have the data, we may proceed with our analysis. We judged normality by looking at tailed-ness; we treated a distribution as normal if both of its tails were within 20% of 0.025 as that is what we would expect from a Normal distribution.
 
 ```{r Fitting the model}
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
@@ -173,32 +172,41 @@ ggsave("Poster//Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 1000)
 summary(model)
 ```
 
+We ran a linear regression to determine that if $n\geq36*skewness^2$ the sampling distribution of the means will be approximately normal as prior defined. We also plot the relationship between skewness and empirical sampling size that we found.
+
 ## Generating Some Graphs
 
+This section is dedicated to creating data and graphs for the poster.
+
 ```{julia Generating Exponential data for graphing}
-#| output: false
-d = Exponential()
-μ = mean(d)
-σ = std(d)
-n = 30
+function graphing()
+    d = Exponential()
+    μ = mean(d)
+    σ = std(d)
+    n = 30
 
-exponential30 = sampling_distribution(mean, d, n, 10_000_000)
-exponential30std = standardize.(exponential30, μ, σ, n)
+    exponential30 = sampling_distribution(mean, d, n, 10_000_000)
+    exponential30std = standardize.(exponential30, μ, σ, n)
 
-n = 150
-exponential150 = sampling_distribution(mean, d, n, 10_000_000)
-exponential150std = standardize.(exponential150, μ, σ, n)
+    n = 150
+    exponential150 = sampling_distribution(mean, d, n, 10_000_000)
+    exponential150std = standardize.(exponential150, μ, σ, n)
 
-graphing = DataFrame(
-    "Exponential 30" => exponential30,
-    "Exponential 30 Z-Scores" => exponential30std,
-    "Exponential 150" => exponential150,
-    "Exponential 150 Z-Scores" => exponential150std
-)
+    graphing = DataFrame(
+        "Exponential" => exponential30,
+        "Exponential Z-Scores" => exponential30std,
+        "Exponential 150" => exponential150,
+        "Exponential 150 Z-Scores" => exponential150std
+    )
 
-# Warning: this produces a large file which is why you will not find graphing.csv in the repository
-CSV.write("graphing.csv", graphing)
+    # Warning: this produces a large file which is why you will not find graphing.csv in the repository
+    CSV.write("graphing.csv", graphing)
+end
+
+graphing()
 ```
+
+We create the data used to graph the exponential sampling distributions
 
 ```{r Graphing sampling distributions}
 #| message: false
@@ -283,6 +291,8 @@ for (col_name in colnames(graphing)) {
 }
 ```
 
+We create two sampling distributions of the Exponential distribution, which has a skewness of 2, to show how the distribution converges to a Normal distribution as sample size increases. We only look at n = 30 and n = 150 to compare the old guideline with the new one.
+
 ```{r Graphing tails}
 read_csv("means.csv") |>
   mutate(
@@ -316,3 +326,5 @@ read_csv("means.csv") |>
 
 ggsave("Poster//Tail_Weights.png", width = 12, height = 6.75, dpi = 1000)
 ```
+
+The convergence rate of a sampling distribution, as shown by the Berry-Essen theorem, is related to the third absolute normalized moment. Skewness directly affects the convergence rate as our skewness shows, and this graph shows the change in tailedness of skewed distributions as sample size changes. The highlighted area is what used as a threshold for normality–both tails being within 20% of 0.025.
