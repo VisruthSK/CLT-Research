@@ -6,11 +6,11 @@ function standardize(x, μ, σ, n::Int64)::Float64
     (x - μ) / (σ / sqrt(n))
 end
 
-function t_score(data::Vector{Float64}, μ::Float64)::Float64
+function t_score(data::Vector{Float64}; μ::Real)::Float64
     standardize(mean(data), μ, std(data), length(data))
 end
 
-function sampling_distribution(d::Distribution, n::Int, r::Int; statistic::Function, args...)::Vector{Float64}
+function sampling_distribution(d::Distribution, n::Int, r::Int, statistic::Function; args...)::Vector{Float64}
     Random.seed!(0)
     # Preallocating vectors for speed
     sample_statistics = zeros(r)
@@ -20,12 +20,10 @@ function sampling_distribution(d::Distribution, n::Int, r::Int; statistic::Funct
     @inbounds for i in 1:r
         rand!(d, sample) # in-place to reduce memory allocation
 
-        # sample_statistics[i] = statistic(sample, args...)::Float64
-
         # TODO Hacky, fix
         try
             # Threads.threadid() == 1 ? println(args) : nothing
-            sample_statistics[i] = statistic(sample; args)::Float64
+            sample_statistics[i] = statistic(sample; args...)::Float64
         catch e
             if isa(e, MethodError)
                 sample_statistics[i] = statistic(sample)::Float64
@@ -38,22 +36,21 @@ function sampling_distribution(d::Distribution, n::Int, r::Int; statistic::Funct
     sample_statistics
 end
 
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real)::Tuple{Float64,Float64,Float64,Float64}
-    sample_statistics = sampling_distribution(d, n, r, statistic=statistic, μ=μ)
+function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64)::Tuple{Float64,Float64,Float64,Float64}
+    sample_statistics = sampling_distribution(d, n, r, statistic, μ=μ)
     skewness = StatsBase.skewness(sample_statistics)
     kurtosis = StatsBase.kurtosis(sample_statistics)
 
     # Standardizing the values to look at tail probabilities
     z_scores = standardize.(sample_statistics, μ, σ, n)
-    # TODO change 1.96 to variable
-    upper = mean(z_scores .>= 1.96)
-    lower = mean(z_scores .<= 1.96)
-    # lower = sum(z_scores .<= -1.96) / r
+
+    upper = sum(z_scores .>= critical) / r
+    lower = sum(z_scores .<= -critical) / r
 
     (upper, lower, skewness, kurtosis)
 end
 
-function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, distributions)::DataFrame
+function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, critical::Function, distributions)::DataFrame
     println("Analyzing sampling distributions of $(statistic) with $(r) repetitions")
     # Setting up the results we're interested in
     results = DataFrame(
@@ -80,7 +77,7 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
         # Analyzing each sample size
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ)
+            upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
             Threads.lock(u) do
                 push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
             end
@@ -92,7 +89,7 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
 end
 
 function main(r)
-    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
+    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
     distributions = [
         Gamma(16),
         LogNormal(0, 0.25),
@@ -104,15 +101,18 @@ function main(r)
         Gamma(0.64),
         LogNormal(0, 0.75)
     ]
+    tstar = n -> quantile(TDist(n), 0.95)
+    zstar = n -> 1.96
+
     # Compile
-    analyze_distributions(mean, 1, sample_sizes, distributions)
-    analyze_distributions(t_score, 1, sample_sizes, distributions)
+    analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
+    analyze_distributions(t_score, 1, sample_sizes, tstar, distributions)
 
     # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
-    means::DataFrame = analyze_distributions(mean, r, sample_sizes, distributions)
+    @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, tstar, distributions)
     CSV.write("means.csv", means)
 
-    t::DataFrame = analyze_distributions(t_score, r, sample_sizes, distributions)
+    @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, zstar, distributions)
     CSV.write("t.csv", t)
 end
 
@@ -140,5 +140,6 @@ function graphing(r)
     CSV.write("graphing.csv", graphing)
 end
 
-main(10_000_000)
-graphing(10_000_000)
+@profview main(100_000)
+# main(10_000_000)
+# graphing(10_000_000)
