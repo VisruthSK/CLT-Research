@@ -16,6 +16,8 @@ function sampling_distribution(d::Distribution, n::Int, r::Int, statistic::Funct
     sample_statistics = zeros(r)
     sample = zeros(n)
 
+    # samples = rand(d, n, r)
+    # sample_statistics = mapcols(col -> statistic(col; args...), samples)
 
     # sample = rand(d, r, n) # Generate the sample matrix directly
 
@@ -65,6 +67,10 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     # Standardizing the values to look at tail probabilities
     z_scores = standardize.(sample_statistics, μ, σ, n)
 
+    println(critical)
+
+    # TODO Fix critical value
+
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
@@ -99,6 +105,7 @@ function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Vect
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
             if params
+                #TODO fix this
                 upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
             else
                 upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
@@ -165,6 +172,6 @@ function graphing(r)
     CSV.write("graphing.csv", graphing)
 end
 
-@profview main(100_000)
-# main(10_000_000)
+# @profview main(100_000)
+main(10_000_000)
 # graphing(10_000_000)
