@@ -10,10 +10,9 @@ function t_score(data::Vector{Float64}; μ::Real)::Float64
     standardize(mean(data), μ, std(data), length(data))
 end
 
-function sampling_distribution(d::Distribution, n::Int, r::Int, statistic::Function; args...)::Vector{Float64}
+function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int, sample_statistics::Vector{Float64}; args...)::Vector{Float64}
     Random.seed!(0)
     # Preallocating vectors for speed
-    sample_statistics = zeros(r) # TODO move out of this function
     sample = zeros(n)
 
     # samples = rand(d, n, r)
@@ -21,51 +20,25 @@ function sampling_distribution(d::Distribution, n::Int, r::Int, statistic::Funct
 
     # sample = rand(d, r, n) # Generate the sample matrix directly
 
-    # # Define a helper function to apply statistic with optional arguments to each column
-    # function apply_statistic(column)
-    #     if isempty(args)
-    #         return statistic(column)
-    #     else
-    #         return statistic(column, args...)
-    #     end
-    # end
-
-    # # Apply the helper function to every column in the sample matrix
-    # result = mapcols(apply_statistic, sample)
-
-    # sample = zeros(r, n)
-    # sample_statistics = statistic.(rand!(d, sample); args...)
-
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(d, sample) # in-place to reduce memory allocation
         sample_statistics[i] = statistic(sample; args...)::Float64
-
-        # # TODO Hacky, fix
-        # try
-        #     sample_statistics[i] = statistic(sample; args...)::Float64
-        # catch e
-        #     if isa(e, MethodError)
-        #         sample_statistics[i] = statistic(sample)::Float64
-        #     else
-        #         rethrow(e)
-        #     end
-        # end
     end
 
+    # samples = zeros(n, r)
+    # sample_statistics = mapcols(col -> statistic(col; args...), samples)
 
-    #print dimensions of sample_statistics
-    # println(size(sample_statistics))
     sample_statistics
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64}
-    sample_statistics = sampling_distribution(d, n, r, statistic; args...)
-    skewness = StatsBase.skewness(sample_statistics)
-    kurtosis = StatsBase.kurtosis(sample_statistics)
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64, sample_statistics; args...)::Tuple{Float64,Float64,Float64,Float64}
+    statistics = sampling_distribution(statistic, d, n, r, sample_statistics; args...)
+    skewness = StatsBase.skewness(statistics)
+    kurtosis = StatsBase.kurtosis(statistics)
 
     # Standardizing the values to look at tail probabilities
-    z_scores = standardize.(sample_statistics, μ, σ, n)
+    z_scores = standardize.(statistics, μ, σ, 1)
 
     # TODO Fix critical value
     upper = sum(z_scores .>= critical) / r
@@ -74,7 +47,7 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     (upper, lower, skewness, kurtosis)
 end
 
-function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Vector{Int64}, critical::Function, distributions, params=false)::DataFrame
+function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector{Int}, critical::Function, distributions, params=false)::DataFrame
     println("Analyzing sampling distributions of $(statistic) with $(r) repetitions")
     # Setting up the results we're interested in
     results = DataFrame(
@@ -88,6 +61,7 @@ function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Vect
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
     )
+    sample_statistics = zeros(r)
 
     # Analyzing each distribution
     @inbounds for d::Distribution in distributions
@@ -103,9 +77,9 @@ function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Vect
         @inbounds Threads.@threads for n in sample_sizes
             if params
                 #TODO fix this
-                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), sample_statistics, μ=μ)
             else
-                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), sample_statistics)
             end
             Threads.lock(u) do
                 push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
@@ -118,7 +92,7 @@ function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Vect
 end
 
 function main(r)
-    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
+    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
     distributions = [
         Gamma(16),
         LogNormal(0, 0.25),
@@ -133,7 +107,6 @@ function main(r)
     tstar = n -> quantile(TDist(n), 0.975)
     zstar = n -> quantile(Normal(), 0.975)
 
-    # TODO add back in
     # Compile
     analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
     analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
@@ -150,14 +123,15 @@ function graphing(r)
     d = Exponential()
     μ = mean(d)
     σ = std(d)
+    sample_statistics = zeros(r)
     n = 30
 
     # Creating sampling distributions
-    exponential30 = sampling_distribution(mean, d, n, r)
+    exponential30 = sampling_distribution(statistic, d, n, r, sample_statistics)
     exponential30std = standardize.(exponential30, μ, σ, n)
 
     n = 150
-    exponential150 = sampling_distribution(mean, d, n, r)
+    exponential150 = sampling_distribution(statistic, d, n, r, sample_statistics)
     exponential150std = standardize.(exponential150, μ, σ, n)
 
     graphing = DataFrame(
@@ -173,28 +147,3 @@ end
 # @profview main(100_000)
 main(10_000_000)
 # graphing(10_000_000)
-
-#=
-CORRECT T* VALUES
-5 2.570581835636314
-10 2.228138851986274
-20 2.0859634472658644
-30 2.0422724563012378
-40 2.0210753903062737
-50 2.0085591121007615
-60 2.00029782201426
-70 1.9944371117711865
-80 1.9900634212544457
-90 1.9866745407037671
-100 1.983971518523551
-125 1.9791241094237972
-150 1.975905330896619
-175 1.973612461954384
-200 1.97189622363391
-250 1.9694983934211534
-300 1.967903011261086
-350 1.9667650028636563
-400 1.9659123432294678
-450 1.965249664736467
-500 1.9647198374673704
-=#
