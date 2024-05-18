@@ -13,7 +13,7 @@ end
 function sampling_distribution(d::Distribution, n::Int, r::Int, statistic::Function; args...)::Vector{Float64}
     Random.seed!(0)
     # Preallocating vectors for speed
-    sample_statistics = zeros(r)
+    sample_statistics = zeros(r) # TODO move out of this function
     sample = zeros(n)
 
     # samples = rand(d, n, r)
@@ -67,10 +67,7 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     # Standardizing the values to look at tail probabilities
     z_scores = standardize.(sample_statistics, μ, σ, n)
 
-    println(critical)
-
     # TODO Fix critical value
-
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
@@ -133,9 +130,10 @@ function main(r)
         Gamma(0.64),
         LogNormal(0, 0.75)
     ]
-    tstar = n -> quantile(TDist(n), 0.95)
-    zstar = n -> 1.96
+    tstar = n -> quantile(TDist(n), 0.975)
+    zstar = n -> quantile(Normal(), 0.975)
 
+    # TODO add back in
     # Compile
     analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
     analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
@@ -144,7 +142,7 @@ function main(r)
     @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, tstar, distributions)
     CSV.write("means.csv", means)
 
-    @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, zstar, distributions, true)
+    @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, tstar, distributions, true)
     CSV.write("t.csv", t)
 end
 
@@ -175,3 +173,28 @@ end
 # @profview main(100_000)
 main(10_000_000)
 # graphing(10_000_000)
+
+#=
+CORRECT T* VALUES
+5 2.570581835636314
+10 2.228138851986274
+20 2.0859634472658644
+30 2.0422724563012378
+40 2.0210753903062737
+50 2.0085591121007615
+60 2.00029782201426
+70 1.9944371117711865
+80 1.9900634212544457
+90 1.9866745407037671
+100 1.983971518523551
+125 1.9791241094237972
+150 1.975905330896619
+175 1.973612461954384
+200 1.97189622363391
+250 1.9694983934211534
+300 1.967903011261086
+350 1.9667650028636563
+400 1.9659123432294678
+450 1.965249664736467
+500 1.9647198374673704
+=#
