@@ -16,28 +16,49 @@ function sampling_distribution(d::Distribution, n::Int, r::Int, statistic::Funct
     sample_statistics = zeros(r)
     sample = zeros(n)
 
+
+    # sample = rand(d, r, n) # Generate the sample matrix directly
+
+    # # Define a helper function to apply statistic with optional arguments to each column
+    # function apply_statistic(column)
+    #     if isempty(args)
+    #         return statistic(column)
+    #     else
+    #         return statistic(column, args...)
+    #     end
+    # end
+
+    # # Apply the helper function to every column in the sample matrix
+    # result = mapcols(apply_statistic, sample)
+
+    # sample = zeros(r, n)
+    # sample_statistics = statistic.(rand!(d, sample); args...)
+
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(d, sample) # in-place to reduce memory allocation
+        sample_statistics[i] = statistic(sample; args...)::Float64
 
-        # TODO Hacky, fix
-        try
-            # Threads.threadid() == 1 ? println(args) : nothing
-            sample_statistics[i] = statistic(sample; args...)::Float64
-        catch e
-            if isa(e, MethodError)
-                sample_statistics[i] = statistic(sample)::Float64
-            else
-                rethrow(e)
-            end
-        end
+        # # TODO Hacky, fix
+        # try
+        #     sample_statistics[i] = statistic(sample; args...)::Float64
+        # catch e
+        #     if isa(e, MethodError)
+        #         sample_statistics[i] = statistic(sample)::Float64
+        #     else
+        #         rethrow(e)
+        #     end
+        # end
     end
 
+
+    #print dimensions of sample_statistics
+    # println(size(sample_statistics))
     sample_statistics
 end
 
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64)::Tuple{Float64,Float64,Float64,Float64}
-    sample_statistics = sampling_distribution(d, n, r, statistic, μ=μ)
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64}
+    sample_statistics = sampling_distribution(d, n, r, statistic; args...)
     skewness = StatsBase.skewness(sample_statistics)
     kurtosis = StatsBase.kurtosis(sample_statistics)
 
@@ -50,7 +71,7 @@ function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real
     (upper, lower, skewness, kurtosis)
 end
 
-function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, critical::Function, distributions)::DataFrame
+function analyze_distributions(statistic::Function, r::Int64, sample_sizes::Vector{Int64}, critical::Function, distributions, params=false)::DataFrame
     println("Analyzing sampling distributions of $(statistic) with $(r) repetitions")
     # Setting up the results we're interested in
     results = DataFrame(
@@ -77,7 +98,11 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
         # Analyzing each sample size
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
+            if params
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
+            else
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
+            end
             Threads.lock(u) do
                 push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
             end
@@ -106,13 +131,13 @@ function main(r)
 
     # Compile
     analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
-    analyze_distributions(t_score, 1, sample_sizes, tstar, distributions)
+    analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
 
     # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
     @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, tstar, distributions)
     CSV.write("means.csv", means)
 
-    @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, zstar, distributions)
+    @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, zstar, distributions, true)
     CSV.write("t.csv", t)
 end
 
