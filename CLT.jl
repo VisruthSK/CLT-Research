@@ -6,6 +6,10 @@ function standardize(x, μ, σ, n::Int64)::Float64
     (x - μ) / (σ / sqrt(n))
 end
 
+function standardize(data::Vector{Float64})::Vector{Float64}
+    (data .- mean(data)) ./ std(data)
+end
+
 function t_score(data::Vector{Float64}; μ::Real)::Float64
     standardize(mean(data), μ, std(data), length(data))
 end
@@ -32,23 +36,23 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
-    println(critical)
-    println(minimum(statistics), " ", maximum(statistics))
+    println("Original: ", minimum(statistics), " ", maximum(statistics))
 
     # Standardizing the values to look at tail probabilities
+    # TODO fix standardization
     z_scores = standardize.(statistics, μ, σ, 1)
-    println("Normalized")
-    println(minimum(z_scores), " ", maximum(z_scores))
+    println("Normalized:", minimum(z_scores), " ", maximum(z_scores))
     println()
 
     dt = fit(ZScoreTransform, z_scores, dims=1)
     StatsBase.transform(dt, statistics)
-
-    println("Normalized Base")
-    println(minimum(statistics), " ", maximum(statistics))
+    println("Normalized Base: ", minimum(statistics), " ", maximum(statistics))
     println()
 
-    # TODO Fix critical value
+    z_scores = standardize(statistics)
+    println("Normalized Base Other: ", minimum(statistics), " ", maximum(statistics))
+    println()
+
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
@@ -154,8 +158,8 @@ end
 
 
 r = 1_000_000
-print(analysis(mean, Exponential(), 30, r, 0, 1, 1.96, zeros(r)))
-print(analysis(mean, Normal(), 30, r, 0, 1, 1.96, zeros(r)))
+print(analysis(mean, Exponential(), 150, r, 0, 1, 1.96, zeros(r)))
+# print(analysis(mean, Normal(), 30, r, 0, 1, 1.96, zeros(r)))
 
 # @profview main(100_000)
 # main(10_000_000)
