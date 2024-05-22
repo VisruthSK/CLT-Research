@@ -12,13 +12,8 @@ end
 
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int, sample_statistics::Vector{Float64}; args...)::Vector{Float64}
     Random.seed!(0)
-    # Preallocating vectors for speed
+    # Preallocating sample vector for speed
     sample = zeros(n)
-
-    # samples = rand(d, n, r)
-    # sample_statistics = mapcols(col -> statistic(col; args...), samples)
-
-    # sample = rand(d, r, n) # Generate the sample matrix directly
 
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
@@ -37,8 +32,21 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
+    println(critical)
+    println(minimum(statistics), " ", maximum(statistics))
+
     # Standardizing the values to look at tail probabilities
     z_scores = standardize.(statistics, μ, σ, 1)
+    println("Normalized")
+    println(minimum(z_scores), " ", maximum(z_scores))
+    println()
+
+    dt = fit(ZScoreTransform, z_scores, dims=1)
+    StatsBase.transform(dt, statistics)
+
+    println("Normalized Base")
+    println(minimum(statistics), " ", maximum(statistics))
+    println()
 
     # TODO Fix critical value
     upper = sum(z_scores .>= critical) / r
@@ -141,9 +149,14 @@ function graphing(r)
         "Exponential 150 Z-Scores" => exponential150std
     )
 
-    CSV.write("graphing.csv", graphing)
+    CSV.write("graphing1.csv", graphing) #todo change
 end
 
+
+r = 1_000_000
+print(analysis(mean, Exponential(), 30, r, 0, 1, 1.96, zeros(r)))
+print(analysis(mean, Normal(), 30, r, 0, 1, 1.96, zeros(r)))
+
 # @profview main(100_000)
-main(10_000_000)
+# main(10_000_000)
 # graphing(10_000_000)
