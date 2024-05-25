@@ -1,6 +1,5 @@
 using Distributions, Random, DataFrames, CSV, StatsBase
 
-
 # TODO replace with zscore from StatsBase
 function standardize(x, μ, σ, n::Int64)::Float64
     (x - μ) / (σ / sqrt(n))
@@ -24,34 +23,35 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
         rand!(d, sample) # in-place to reduce memory allocation
         sample_statistics[i] = statistic(sample; args...)::Float64
     end
-
+    
     # samples = zeros(n, r)
     # sample_statistics = mapcols(col -> statistic(col; args...), samples)
-
+    
     sample_statistics
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64, sample_statistics; args...)::Tuple{Float64,Float64,Float64,Float64}
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64}
+    sample_statistics = zeros(r)
     statistics = sampling_distribution(statistic, d, n, r, sample_statistics; args...)
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
-    println("Original: ", minimum(statistics), " ", maximum(statistics))
+    # println("Original: ", minimum(statistics), " ", maximum(statistics))
 
     # Standardizing the values to look at tail probabilities
     # TODO fix standardization
-    z_scores = standardize.(statistics, μ, σ, 1)
-    println("Normalized:", minimum(z_scores), " ", maximum(z_scores))
-    println()
+    # z_scores = standardize.(statistics, μ, σ, 1)
+    # println("Normalized:", minimum(z_scores), " ", maximum(z_scores))
+    # println()
 
-    dt = fit(ZScoreTransform, z_scores, dims=1)
-    StatsBase.transform(dt, statistics)
-    println("Normalized Base: ", minimum(statistics), " ", maximum(statistics))
-    println()
+    # dt = fit(ZScoreTransform, z_scores, dims=1)
+    # StatsBase.transform(dt, statistics)
+    # println("Normalized Base: ", minimum(statistics), " ", maximum(statistics))
+    # println()
 
     z_scores = standardize(statistics)
-    println("Normalized Base Other: ", minimum(statistics), " ", maximum(statistics))
-    println()
+    # println("Normalized Base Other: ", minimum(statistics), " ", maximum(statistics))
+    # println()
 
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
@@ -73,7 +73,6 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
     )
-    sample_statistics = zeros(r)
 
     # Analyzing each distribution
     @inbounds for d::Distribution in distributions
@@ -89,9 +88,9 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         @inbounds Threads.@threads for n in sample_sizes
             if params
                 #TODO fix this
-                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), sample_statistics, μ=μ)
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
             else
-                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), sample_statistics)
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
             end
             Threads.lock(u) do
                 push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
@@ -124,7 +123,7 @@ function main(r)
     analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
 
     # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
-    @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, tstar, distributions)
+    @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, zstar, distributions)
     CSV.write("means.csv", means)
 
     @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, tstar, distributions, true)
@@ -157,10 +156,19 @@ function graphing(r)
 end
 
 
-r = 1_000_000
-print(analysis(mean, Exponential(), 150, r, 0, 1, 1.96, zeros(r)))
+# r = 1_000_000
+# print(analysis(mean, Exponential(), 150, r, 0, 1, 1.96, zeros(r)))
+# main(r)
 # print(analysis(mean, Normal(), 30, r, 0, 1, 1.96, zeros(r)))
 
 # @profview main(100_000)
-# main(10_000_000)
+main(10_000_000)
 # graphing(10_000_000)
+
+# sample_statistics = zeros(10_000_000)
+# x = sampling_distribution(mean, Binomial(0.6), 20, 10_000_000, sample_statistics)
+# using StatBase
+# Histogram(x)
+
+# Exponential{Float64}(θ=1.0),2.0,1,0.0517337,0.0,1.9985202915999642,5.98473738026075,1.0,1.0
+# Exponential{Float64}(θ=1.0),2.0,1,0.0518475,0.0,1.9985202915999642,5.98473738026075,1.0,1.0
