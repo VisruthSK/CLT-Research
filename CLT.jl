@@ -23,10 +23,10 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
         rand!(d, sample) # in-place to reduce memory allocation
         sample_statistics[i] = statistic(sample; args...)::Float64
     end
-    
+
     # samples = zeros(n, r)
     # sample_statistics = mapcols(col -> statistic(col; args...), samples)
-    
+
     sample_statistics
 end
 
@@ -103,7 +103,7 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
 end
 
 function main(r)
-    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
+    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
     distributions = [
         Gamma(16),
         LogNormal(0, 0.25),
@@ -155,20 +155,5 @@ function graphing(r)
     CSV.write("graphing1.csv", graphing) #todo change
 end
 
-
-# r = 1_000_000
-# print(analysis(mean, Exponential(), 150, r, 0, 1, 1.96, zeros(r)))
-# main(r)
-# print(analysis(mean, Normal(), 30, r, 0, 1, 1.96, zeros(r)))
-
-# @profview main(100_000)
 main(10_000_000)
 # graphing(10_000_000)
-
-# sample_statistics = zeros(10_000_000)
-# x = sampling_distribution(mean, Binomial(0.6), 20, 10_000_000, sample_statistics)
-# using StatBase
-# Histogram(x)
-
-# Exponential{Float64}(θ=1.0),2.0,1,0.0517337,0.0,1.9985202915999642,5.98473738026075,1.0,1.0
-# Exponential{Float64}(θ=1.0),2.0,1,0.0518475,0.0,1.9985202915999642,5.98473738026075,1.0,1.0
