@@ -1,16 +1,15 @@
 using Distributions, Random, DataFrames, CSV, StatsBase
 
-# TODO replace with zscore from StatsBase
 function standardize(x, μ, σ, n::Int64)::Float64
     (x - μ) / (σ / sqrt(n))
 end
 
 function standardize(data::Vector{Float64})::Vector{Float64}
-    (data .- mean(data)) ./ std(data)
+    standardize.(mean(data), μ, std(data), 1)
 end
 
-function t_score(data::Vector{Float64}; μ::Real)::Float64
-    standardize(mean(data), μ, std(data), length(data))
+function t_score(data::Vector{Float64}; μ::Real)::Vector{Float64}
+    standardize.(mean(data), μ, std(data), length(data))
 end
 
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int, sample_statistics::Vector{Float64}; args...)::Vector{Float64}
@@ -24,9 +23,6 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
         sample_statistics[i] = statistic(sample; args...)::Float64
     end
 
-    # samples = zeros(n, r)
-    # sample_statistics = mapcols(col -> statistic(col; args...), samples)
-
     sample_statistics
 end
 
@@ -36,22 +32,9 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
-    # println("Original: ", minimum(statistics), " ", maximum(statistics))
-
     # Standardizing the values to look at tail probabilities
-    # TODO fix standardization
-    # z_scores = standardize.(statistics, μ, σ, 1)
-    # println("Normalized:", minimum(z_scores), " ", maximum(z_scores))
-    # println()
-
-    # dt = fit(ZScoreTransform, z_scores, dims=1)
-    # StatsBase.transform(dt, statistics)
-    # println("Normalized Base: ", minimum(statistics), " ", maximum(statistics))
-    # println()
-
-    z_scores = standardize(statistics)
-    # println("Normalized Base Other: ", minimum(statistics), " ", maximum(statistics))
-    # println()
+    z_scores = zeros(r)
+    zscore!(z_scores, statistics, mean(statistics), std(statistics))
 
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
@@ -128,6 +111,8 @@ function main(r)
 
     @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, tstar, distributions, true)
     CSV.write("t.csv", t)
+
+    nothing
 end
 
 function graphing(r)
@@ -139,11 +124,11 @@ function graphing(r)
 
     # Creating sampling distributions
     exponential30 = sampling_distribution(statistic, d, n, r, sample_statistics)
-    exponential30std = standardize.(exponential30, μ, σ, n)
+    exponential30std = standardize(exponential30)
 
     n = 150
     exponential150 = sampling_distribution(statistic, d, n, r, sample_statistics)
-    exponential150std = standardize.(exponential150, μ, σ, n)
+    exponential150std = standardize(exponential150)
 
     graphing = DataFrame(
         "Exponential" => exponential30,
@@ -152,7 +137,9 @@ function graphing(r)
         "Exponential 150 Z-Scores" => exponential150std
     )
 
-    CSV.write("graphing1.csv", graphing) #todo change
+    CSV.write("graphing.csv", graphing)
+
+    nothing
 end
 
 main(10_000_000)
