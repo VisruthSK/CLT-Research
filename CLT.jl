@@ -1,20 +1,41 @@
 using Distributions, Random, DataFrames, CSV, StatsBase
 
-function standardize(x, μ, σ, n::Int64)::Float64
+"""
+    standardize(x, μ, σ, n=1)
+
+Standardize a value `x` given the mean `μ`, standard deviation `σ`, and sample size `n` of some data x belongs to.
+"""
+function standardize(x, μ, σ, n::Int64=1)::Float64
     (x - μ) / (σ / sqrt(n))
 end
 
+"""
+    standardize(data)
+
+Standardize a vector by converting to z-scores.
+"""
 function standardize(data::Vector{Float64})::Vector{Float64}
-    standardize.(mean(data), μ, std(data), 1)
+    standardize.(data, mean(data), std(data))
 end
 
+"""
+    t_score(x, μ, σ, n)
+
+Standardize a vector by converting to t-scores.
+"""
 function t_score(data::Vector{Float64}; μ::Real)::Vector{Float64}
-    standardize.(mean(data), μ, std(data), length(data))
+    standardize.(data, μ, std(data), length(data))
 end
 
-function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int, sample_statistics::Vector{Float64}; args...)::Vector{Float64}
+"""
+    sampling_distribution(statistic, d, n, r; args...)
+
+Generate a sampling distribution of a statistic `statistic` given a distribution `d`, sample size `n`, and number of repetitions `r`. Optional arguments passed to statistic function.
+"""
+function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Vector{Float64}
     Random.seed!(0)
-    # Preallocating sample vector for speed
+    # Preallocating vectors for speed
+    sample_statistics = zeros(r)
     sample = zeros(n)
 
     # Sampling r times and calculating the statistic
@@ -27,8 +48,7 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
 end
 
 function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64}
-    sample_statistics = zeros(r)
-    statistics = sampling_distribution(statistic, d, n, r, sample_statistics; args...)
+    statistics = sampling_distribution(statistic, d, n, r; args...)
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
@@ -36,6 +56,7 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     z_scores = zeros(r)
     zscore!(z_scores, statistics, mean(statistics), std(statistics))
 
+    # Calculating tail probabilities
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
@@ -70,7 +91,6 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
             if params
-                #TODO fix this
                 upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
             else
                 upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
@@ -98,41 +118,38 @@ function main(r)
         Gamma(0.64),
         LogNormal(0, 0.75)
     ]
-    tstar = n -> quantile(TDist(n), 0.975)
+    # tstar = n -> quantile(TDist(n), 0.975)
     zstar = n -> quantile(Normal(), 0.975)
 
     # Compile
     analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
-    analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
+    # analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
 
     # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
     @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, zstar, distributions)
     CSV.write("means.csv", means)
 
-    @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, tstar, distributions, true)
-    CSV.write("t.csv", t)
+    # @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, tstar, distributions, true)
+    # CSV.write("t.csv", t)
 
     nothing
 end
 
 function graphing(r)
     d = Exponential()
-    μ = mean(d)
-    σ = std(d)
-    sample_statistics = zeros(r)
     n = 30
 
     # Creating sampling distributions
-    exponential30 = sampling_distribution(statistic, d, n, r, sample_statistics)
+    exponential30 = sampling_distribution(mean, d, n, r)
     exponential30std = standardize(exponential30)
 
     n = 150
-    exponential150 = sampling_distribution(statistic, d, n, r, sample_statistics)
+    exponential150 = sampling_distribution(mean, d, n, r)
     exponential150std = standardize(exponential150)
 
     graphing = DataFrame(
-        "Exponential" => exponential30,
-        "Exponential Z-Scores" => exponential30std,
+        "Exponential 30" => exponential30,
+        "Exponential 30 Z-Scores" => exponential30std,
         "Exponential 150" => exponential150,
         "Exponential 150 Z-Scores" => exponential150std
     )

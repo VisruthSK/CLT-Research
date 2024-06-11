@@ -287,7 +287,7 @@ for (col_name in colnames(graphing)) {
 
   combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
 
-  ggsave(paste0("Poster//", col_name, ".png"), plot = combined, width = 12, height = 6.75, dpi = 1000)
+  ggsave(paste0("Poster//", str_replace(str_sub(col_name,1,-10)," ", "_"), ".png"), plot = combined, width = 12, height = 6.75, dpi = 200)
 }
 ```
 
