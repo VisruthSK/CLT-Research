@@ -16,15 +16,16 @@ function standardize(x, μ, σ, n::Int64)::Float64
     (x - μ) / (σ / sqrt(n))
 end
 
-function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int)::Vector{Float64}
+function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Vector{Float64}
     Random.seed!(0)
+    # Preallocating vectors for speed
     sample_statistics = zeros(r)
     sample = zeros(n)
 
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
-        rand!(d, sample)
-        sample_statistics[i] = statistic(sample)::Float64
+        rand!(d, sample) # in-place to reduce memory allocation
+        sample_statistics[i] = statistic(sample; args...)::Float64
     end
 
     sample_statistics
@@ -35,14 +36,18 @@ This function creates a sampling distribution, using the given distribution and 
 
 ```{julia Single distribution analysis}
 #| output: false
-function analysis(statistic, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, sample_statistics=sampling_distribution(statistic, d, n, r))::Tuple{Float64,Float64,Float64,Float64}
-    skewness = StatsBase.skewness(sample_statistics)
-    kurtosis = StatsBase.kurtosis(sample_statistics)
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64}
+    statistics = sampling_distribution(statistic, d, n, r; args...)
+    skewness = StatsBase.skewness(statistics)
+    kurtosis = StatsBase.kurtosis(statistics)
 
-    z_scores = standardize.(sample_statistics, μ, σ, n)
+    # Standardizing the values to look at tail probabilities
+    z_scores = zeros(r)
+    zscore!(z_scores, statistics, mean(statistics), std(statistics))
 
-    upper = sum(z_scores .>= 1.96) / r
-    lower = sum(z_scores .<= -1.96) / r
+    # Calculating tail probabilities
+    upper = sum(z_scores .>= critical) / r
+    lower = sum(z_scores .<= -critical) / r
 
     (upper, lower, skewness, kurtosis)
 end
@@ -52,9 +57,9 @@ This function then finds the upper and lower tails of this sampling distribution
 
 ```{julia Analyzing multiple distributions}
 #| output: false
-function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64}, distributions)::DataFrame
-    println("Analyzing distributions with $(r) repetitions")
-    # Some setup
+function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector{Int}, critical::Function, distributions, params=false)::DataFrame
+    println("Analyzing sampling distributions of $(statistic) with $(r) repetitions")
+    # Setting up the results we're interested in
     results = DataFrame(
         "Distribution" => String[],
         "Skewness" => Float64[],
@@ -79,7 +84,11 @@ function analyze_distributions(statistic, r::Int64, sample_sizes::Vector{Int64},
         # Analyzing each sample size
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
-            upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ)
+            if params
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
+            else
+                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
+            end
             Threads.lock(u) do
                 push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
             end
@@ -94,7 +103,7 @@ end
 ```{julia Generate data}
 #| output: false
 function main(r)
-    sample_sizes = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500]
+    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
     distributions = [
         Gamma(16),
         LogNormal(0, 0.25),
@@ -106,18 +115,27 @@ function main(r)
         Gamma(0.64),
         LogNormal(0, 0.75)
     ]
+    # tstar = n -> quantile(TDist(n), 0.975)
+    zstar = n -> quantile(Normal(), 0.975)
+
     # Compile
-    analyze_distributions(mean, 1, sample_sizes, distributions)
+    analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
+    # analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
 
     # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
-    results::DataFrame = analyze_distributions(mean, r, sample_sizes, distributions)
+    @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, zstar, distributions)
+    CSV.write("means.csv", means)
 
-    CSV.write("means.csv", results)
+    # @time t::DataFrame = analyze_distributions(t_score, r, sample_sizes, tstar, distributions, true)
+    # CSV.write("t.csv", t)
+
+    nothing
 end
-main() # remove this if you want to render the document but already have data
+
+main(1_000_000) # remove this if you want to render the document but already have data
 ```
 
-We used r = 10,000,000 repetitions to create our sampling distributions of means (means.csv). Keep in mind that, while Julia is fast, this is a non-trivial task and will take some time. It is highly recommended to run the code in a Julia REPL instead of this notebook.
+We used r = 1_000_000 repetitions to create our sampling distributions of means (means.csv). Keep in mind that, while Julia is fast, this is a non-trivial task and will take some time. It is highly recommended to run the code in a Julia REPL instead of this notebook.
 
 ## Analyzing the Data
 
@@ -180,31 +198,31 @@ We ran a linear regression to determine that if $n\geq36*skewness^2$ the samplin
 This section is dedicated to creating data and graphs for the poster.
 
 ```{julia Generating Exponential data for graphing}
-function graphing()
+function graphing(r)
     d = Exponential()
-    μ = mean(d)
-    σ = std(d)
     n = 30
 
-    exponential30 = sampling_distribution(mean, d, n, 10_000_000)
-    exponential30std = standardize.(exponential30, μ, σ, n)
+    # Creating sampling distributions
+    exponential30 = sampling_distribution(mean, d, n, r)
+    exponential30std = standardize(exponential30)
 
     n = 150
-    exponential150 = sampling_distribution(mean, d, n, 10_000_000)
-    exponential150std = standardize.(exponential150, μ, σ, n)
+    exponential150 = sampling_distribution(mean, d, n, r)
+    exponential150std = standardize(exponential150)
 
     graphing = DataFrame(
-        "Exponential" => exponential30,
-        "Exponential Z-Scores" => exponential30std,
+        "Exponential 30" => exponential30,
+        "Exponential 30 Z-Scores" => exponential30std,
         "Exponential 150" => exponential150,
         "Exponential 150 Z-Scores" => exponential150std
     )
 
-    # Warning: this produces a large file which is why you will not find graphing.csv in the repository
     CSV.write("graphing.csv", graphing)
+
+    nothing
 end
 
-graphing()
+graphing(1_000_000)
 ```
 
 We create the data used to graph the exponential sampling distributions

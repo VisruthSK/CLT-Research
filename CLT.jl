@@ -54,7 +54,8 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
 
     # Standardizing the values to look at tail probabilities
     z_scores = zeros(r)
-    zscore!(z_scores, statistics, mean(statistics), std(statistics))
+    # zscore!(z_scores, statistics, mean(statistics), std(statistics))
+    zscore!(z_scores, statistics, μ, σ / sqrt(n))
 
     # Calculating tail probabilities
     upper = sum(z_scores .>= critical) / r
@@ -64,7 +65,7 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
 end
 
 function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector{Int}, critical::Function, distributions, params=false)::DataFrame
-    println("Analyzing sampling distributions of $(statistic) with $(r) repetitions")
+    println("Analyzing sampling distributions of $(statistic)s with $(r) repetitions")
     # Setting up the results we're interested in
     results = DataFrame(
         "Distribution" => String[],
@@ -125,7 +126,7 @@ function main(r)
     analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
     # analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
 
-    # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
+    # Warning: this code will take a very long time to run if used with a large r. We used r = 1_000_000
     @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, zstar, distributions)
     CSV.write("means.csv", means)
 
