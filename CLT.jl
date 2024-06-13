@@ -54,7 +54,6 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
 
     # Standardizing the values to look at tail probabilities
     z_scores = zeros(r)
-    # zscore!(z_scores, statistics, mean(statistics), std(statistics))
     zscore!(z_scores, statistics, μ, σ / sqrt(n))
 
     # Calculating tail probabilities
@@ -139,14 +138,19 @@ end
 function graphing(r)
     d = Exponential()
     n = 30
-
+    μ = mean(d)
+    σ = std(d)
     # Creating sampling distributions
     exponential30 = sampling_distribution(mean, d, n, r)
-    exponential30std = standardize(exponential30)
+    exponential30std = zeros(r)
+    zscore!(exponential30std, exponential30, μ, σ / sqrt(n))
+    # exponential30std = standardize(exponential30)
 
     n = 150
     exponential150 = sampling_distribution(mean, d, n, r)
-    exponential150std = standardize(exponential150)
+    exponential150std = zeros(r)
+    zscore!(exponential150std, exponential150, μ, σ / sqrt(n))
+    # exponential150std = standardize(exponential150)
 
     graphing = DataFrame(
         "Exponential 30" => exponential30,
@@ -161,4 +165,4 @@ function graphing(r)
 end
 
 main(1_000_000)
-# graphing(1_000_000)
+graphing(1_000_000)
