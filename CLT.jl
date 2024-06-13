@@ -159,5 +159,5 @@ function graphing(r)
     nothing
 end
 
-main(10_000_000)
-# graphing(10_000_000)
+main(1_000_000)
+# graphing(1_000_000)

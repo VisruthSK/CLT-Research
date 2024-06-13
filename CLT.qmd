@@ -132,6 +132,7 @@ df <- read_csv("means.csv") |>
     `Lower Tail` >= 0.02 & `Lower Tail` <= 0.03,
     `Upper Tail` >= 0.02 & `Upper Tail` <= 0.03
   ) |>
+  # filter(`Sampling Skewness` <= 1/6) |>
   filter(`Sample Size` == min(`Sample Size`)) |> # get the smallest sample size for each distribution
   select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
   arrange(Skewness, Distribution)
