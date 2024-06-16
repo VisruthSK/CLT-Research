@@ -164,5 +164,80 @@ function graphing(r)
     nothing
 end
 
-main(1_000_000)
-graphing(1_000_000)
+# main(1_000_000)
+# graphing(1_000_000)
+
+function adjustedSkew(x)
+    n = length(x)
+    sqrt(n * (n - 1)) / (n - 2) * skewness(x)
+end
+
+function RAS(x; d)
+    # sample skewness/population skewness
+    adjustedSkew(x) / skewness(d)
+end
+
+function testing(r=1_000_000)
+    distributions = [
+        Gamma(16),
+        LogNormal(0, 0.25),
+        Gamma(4),
+        Gamma(2),
+        LogNormal(0, 0.5),
+        Gamma(1),
+        Exponential(),
+        Gamma(0.64),
+        LogNormal(0, 0.75)
+    ]
+    results = DataFrame(
+        "Distribution" => String[],
+        "Sample Size" => Int64[],
+        "Population Skewness" => Float64[],
+        "Median" => Float64[],
+        "IQR" => Float64[],
+        "Sampling Distro Skewness" => Float64[],
+    )
+    for d in distributions
+        println(string(d))
+        n = round(Int, skewness(d)^2 * 36)
+        x = sampling_distribution(RAS, d, n, r; d)
+        push!(results, (string(d), n, skewness(d), median(x), quantile(x, 0.75) - quantile(x, 0.25), skewness(x)))
+    end
+
+    results
+end
+
+println(testing())
+
+# n = 30
+# z = sampling_distribution(RAS, d, n, 1_000_000; d=d)
+# histogram(z, bins=100, label="RAS of Exponential", xlabel="RAS", ylabel="Frequency", title="Histogram of RAS of Exponential", legend=:topleft)
+# println(n)
+# println("median: ", median(z))
+# println("IQR: ", quantile(z, 0.75) - quantile(z, 0.25))
+# println("skewness: ", skewness(z))
+
+# using Plots
+# # d = Gamma(0.64)
+# d = Exponential()
+# # n = round(Int, skewness(d)^2 * 36)
+# n = 30
+
+# x = sampling_distribution(adjustedSkew, d, n, 1_000_000)
+# histogram(x, bins=100, label="Skewness of Exponential", xlabel="Skewness", ylabel="Frequency", title="Histogram of Skewness of Exponential", legend=:topleft)
+# println("median: ", median(x))
+# println("IQR: ", quantile(x, 0.75) - quantile(x, 0.25))
+# println("skewness: ", skewness(x))
+# println()
+
+# y = sampling_distribution(skewness, d, n, 1_000_000)
+# histogram(y, bins=100, label="Skewness of Exponential", xlabel="Skewness", ylabel="Frequency", title="Histogram of Skewness of Exponential", legend=:topleft)
+# println("median: ", median(y))
+# println("IQR: ", quantile(y, 0.75) - quantile(y, 0.25))
+# println("skewness: ", skewness(y))
+# println()
+
+# println(mean(x - y))
+
+# analysis(mean, Exponential(), 75, 1_000_000, mean(Exponential()), std(Exponential()), 1.96)
+
