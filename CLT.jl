@@ -191,8 +191,8 @@ function testing(r=1_000_000)
     ]
     results = DataFrame(
         "Distribution" => String[],
-        "Sample Size" => Int64[],
-        "Population Skewness" => Float64[],
+        "SampleSize" => Int64[],
+        "PopulationSkewness" => Float64[],
         "Median" => Float64[],
         "IQR" => Float64[],
         "Sampling Distro Skewness" => Float64[],
@@ -207,8 +207,22 @@ function testing(r=1_000_000)
     results
 end
 
-println(testing())
+df = testing()
+println(df)
 
+#regression log(median) against sample size in df
+ols = lm(@formula(Median^2 ~ PopulationSkewness), df)
+ols
+r2(ols)
+
+# Regression median col of df against sample size
+using GLM
+ols = lm(@formula(Median ~ PopulationSkewness), df)
+ols
+r2(ols)
+# scatterplot of median against sample size
+using Plots
+scatter(df.SampleSize, df.Median, group=df.Distribution, xlabel="Sample Size", ylabel="Median", title="Median vs Sample Size", legend=:bottomright)
 # n = 30
 # z = sampling_distribution(RAS, d, n, 1_000_000; d=d)
 # histogram(z, bins=100, label="RAS of Exponential", xlabel="RAS", ylabel="Frequency", title="Histogram of RAS of Exponential", legend=:topleft)
@@ -219,14 +233,16 @@ println(testing())
 
 # using Plots
 # # d = Gamma(0.64)
-# d = Exponential()
-# # n = round(Int, skewness(d)^2 * 36)
+d = Exponential()
+n = round(Int, skewness(d)^2 * 36)
 # n = 30
 
-# x = sampling_distribution(adjustedSkew, d, n, 1_000_000)
-# histogram(x, bins=100, label="Skewness of Exponential", xlabel="Skewness", ylabel="Frequency", title="Histogram of Skewness of Exponential", legend=:topleft)
-# println("median: ", median(x))
-# println("IQR: ", quantile(x, 0.75) - quantile(x, 0.25))
+x = sampling_distribution(RAS, d, n, 1_000_000; d)
+# histogram with median and iqr labels
+histogram(x, bins=100, xlabel="Skewness", ylabel="Frequency", title="Sample Skewness/Pop Skewness")
+
+println("median: ", median(x))
+println("IQR: ", quantile(x, 0.75) - quantile(x, 0.25))
 # println("skewness: ", skewness(x))
 # println()
 
