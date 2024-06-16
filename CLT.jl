@@ -199,8 +199,9 @@ function testing(r=1_000_000)
     )
     for d in distributions
         println(string(d))
-        n = round(Int, skewness(d)^2 * 36)
-        x = sampling_distribution(RAS, d, n, r; d)
+        n = round(Int, (skewness(d))^2 * 36)
+        f(x) = 1.25 * adjustedSkew(x)
+        x = sampling_distribution(f, d, n, r)
         push!(results, (string(d), n, skewness(d), median(x), quantile(x, 0.75) - quantile(x, 0.25), skewness(x)))
     end
 
@@ -211,18 +212,18 @@ df = testing()
 println(df)
 
 #regression log(median) against sample size in df
-ols = lm(@formula(Median^2 ~ PopulationSkewness), df)
-ols
-r2(ols)
+# ols = lm(@formula(Median^2 ~ PopulationSkewness), df)
+# ols
+# r2(ols)
 
 # Regression median col of df against sample size
-using GLM
-ols = lm(@formula(Median ~ PopulationSkewness), df)
-ols
-r2(ols)
+# using GLM
+# ols = lm(@formula(Median ~ PopulationSkewness), df)
+# ols
+# r2(ols)
 # scatterplot of median against sample size
-using Plots
-scatter(df.SampleSize, df.Median, group=df.Distribution, xlabel="Sample Size", ylabel="Median", title="Median vs Sample Size", legend=:bottomright)
+# using Plots
+# scatter(df.SampleSize, df.Median, group=df.Distribution, xlabel="Sample Size", ylabel="Median", title="Median vs Sample Size", legend=:bottomright)
 # n = 30
 # z = sampling_distribution(RAS, d, n, 1_000_000; d=d)
 # histogram(z, bins=100, label="RAS of Exponential", xlabel="RAS", ylabel="Frequency", title="Histogram of RAS of Exponential", legend=:topleft)
@@ -233,16 +234,16 @@ scatter(df.SampleSize, df.Median, group=df.Distribution, xlabel="Sample Size", y
 
 # using Plots
 # # d = Gamma(0.64)
-d = Exponential()
-n = round(Int, skewness(d)^2 * 36)
+# d = Exponential()
+# n = round(Int, skewness(d)^2 * 36)
 # n = 30
 
-x = sampling_distribution(RAS, d, n, 1_000_000; d)
+# x = sampling_distribution(RAS, d, n, 1_000_000; d)
 # histogram with median and iqr labels
-histogram(x, bins=100, xlabel="Skewness", ylabel="Frequency", title="Sample Skewness/Pop Skewness")
+# histogram(x, bins=100, xlabel="Skewness", ylabel="Frequency", title="Sample Skewness/Pop Skewness")
 
-println("median: ", median(x))
-println("IQR: ", quantile(x, 0.75) - quantile(x, 0.25))
+# println("median: ", median(x))
+# println("IQR: ", quantile(x, 0.75) - quantile(x, 0.25))
 # println("skewness: ", skewness(x))
 # println()
 
