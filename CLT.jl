@@ -1,5 +1,4 @@
-using Distributions, Random, DataFrames, CSV, StatsBase
-
+using Distributions, Random, DataFrames, CSV, StatsBase, Statistics
 """
     standardize(x, μ, σ, n=1)
 
@@ -47,10 +46,14 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
     sample_statistics
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64}
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64}
     statistics = sampling_distribution(statistic, d, n, r; args...)
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
+
+    # NOT STANDARDIZED
+    md = median(statistics)
+    IQR = quantile(statistics, 0.75) - quantile(statistics, 0.25)
 
     # Standardizing the values to look at tail probabilities
     z_scores = zeros(r)
@@ -60,7 +63,7 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
-    (upper, lower, skewness, kurtosis)
+    (md, IQR, upper, lower, skewness, kurtosis)
 end
 
 function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector{Int}, critical::Function, distributions, params=false)::DataFrame
@@ -70,6 +73,8 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         "Distribution" => String[],
         "Skewness" => Float64[],
         "Sample Size" => Int64[],
+        "Median" => Float64[],
+        "IQR" => Float64[],
         "Upper Tail" => Float64[],
         "Lower Tail" => Float64[],
         "Sampling Skewness" => Float64[],
@@ -91,12 +96,12 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
             if params
-                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
+                median, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
             else
-                upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
+                median, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
             end
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
+                push!(results, (string(d), skewness, n, median, IQR, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
             end
         end
 
@@ -191,25 +196,87 @@ function testing(r=1_000_000)
     ]
     results = DataFrame(
         "Distribution" => String[],
-        "SampleSize" => Int64[],
-        "PopulationSkewness" => Float64[],
-        "Median" => Float64[],
-        "IQR" => Float64[],
-        "Sampling Distro Skewness" => Float64[],
+        "Sample Size" => Int64[],
+        "Population Skewness" => Float64[],
+        "Median Sample Skewness" => Float64[],
+        "IQR Sample Skewness" => Float64[],
+        "Sampling Distribution Sample Skewness" => Float64[],
     )
     for d in distributions
         println(string(d))
         n = round(Int, (skewness(d))^2 * 36)
-        f(x) = 1.25 * adjustedSkew(x)
-        x = sampling_distribution(f, d, n, r)
+        # n = 50
+        x = sampling_distribution(adjustedSkew, d, n, r)
+        # y = sampling_distribution(adjustedSkew, d, n, r)
         push!(results, (string(d), n, skewness(d), median(x), quantile(x, 0.75) - quantile(x, 0.25), skewness(x)))
     end
 
+    results."Skews Ratio" = results."Population Skewness" ./ results."Median Sample Skewness"
     results
 end
 
-df = testing()
+analyze_distributions(adjustedSkew, 1, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500], n -> quantile(Normal(), 0.975), [Gamma(16), LogNormal(0, 0.25), Gamma(4), Gamma(2), LogNormal(0, 0.5), Gamma(1), Exponential(), Gamma(0.64), LogNormal(0, 0.75)])
+df = analyze_distributions(adjustedSkew, 1_000_000, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500], n -> quantile(Normal(), 0.975), [Gamma(16), LogNormal(0, 0.25), Gamma(4), Gamma(2), LogNormal(0, 0.5), Gamma(1), Exponential(), Gamma(0.64), LogNormal(0, 0.75)])
 println(df)
+
+df."Ratio" = df."Median" ./ df."Skewness"
+
+using Plots
+scatter(log.(df."Sample Size"), (df."Ratio"), group=df.Distribution, legend=false, xlabel="log(Sample Size)", ylabel="Median/Skewness Ratio", title="Median/Skewness Ratio vs Sample Size")
+# lin reg of median/skewness ratio against sample size
+using GLM
+df."Logn" = log.(df."Sample Size")
+ols = lm(@formula(Ratio ~ Logn), df)
+#  get formula from ols
+r2(ols)
+
+# G_1/γ_1 ≈ 0.3 + 0.11*ln(n)
+# G_1/(0.3 + 0.11*ln(n)) ≈ γ_1
+
+df."Test" = df."Median" ./ (0.3 .+ 0.11 .* df."Logn")
+err = df."Test" .- df."Skewness"
+mean(err)
+std(err)
+median(err)
+quantile(err, 0.75) - quantile(err, 0.25)
+
+df."Test" .^ 2 .* 36 - df."Skewness" .^ 2 .* 36
+
+df."samplen" = round.(Int, df."Median" .^ 2 .* 36)
+df."adjustedsamplen" = round.(Int, df."Test" .^ 2 .* 36)
+df."populationn" = round.(Int, df."Skewness" .^ 2 .* 36)
+df."basicn" = round.(Int, (1.3 .* df."Median") .^ 2 .* 36)
+df."n" = df."Sample Size"
+subdf = df[!, [:n, :Median, :Skewness, :samplen, :adjustedsamplen, :populationn, :basicn]]
+println(subdf)
+using CSV
+CSV.write("SampleSizeEstimates.csv", subdf)
+# print sample size, median, samplen, populationn, basicn
+
+using HypothesisTests
+OneSampleTTest(df."basicn", df."populationn")
+
+# set x-values in histogram to increase by 50
+histogram(df."samplen", bins=20, xlims=(0, 300))
+histogram(df."populationn", bins=20, xlims=(0, 300))
+
+# histogram(df."Test" .^ 2 .* 36 - df."Skewness" .^ 2 .* 36)
+# histogram 
+histogram(df."Test" .- df."Skewness", bins=100, xlabel="Test", ylabel="Frequency", title="Histogram of Test", legend=:topleft)
+scatter(df."Sample Size", (df."Skewness" - df."Median"), group=df.Distribution)
+# plot median vs sample size
+scatter(df."Sample Size", df."Median", group=df.Distribution, xlabel="Sample Size", ylabel="Median Skewness", title="Sample Skewness vs Sample Size", legend=false)
+
+scatter(log.(df."Sample Size"), df."Ratio", group=df.Distribution, xlabel="Log Sample Size", ylabel="Ratio Skewness", title="Sample Skewness vs Sample Size", legend=false)
+# df = testing()
+
+# using Plots
+# plot Skews Ratio against Sample Size
+# scatter((df."Sample Size"), df."Skews Ratio", group=df.Distribution)
+# using GLM
+# ols = lm(@formula(term("Skews Ratio") ~ term("Sample Size")), df)
+# using Plots
+# scatter(df."Sampling Distribution of Means Skewness", df."Median Sample Skewness", group=df.Distribution, xlabel="Sampling Distribution of Means Skewness", ylabel="Median Sample Skewness", title="Median Sample Skewness vs Sampling Distribution of Means Skewness", legend=:bottomright)
 
 #regression log(median) against sample size in df
 # ols = lm(@formula(Median^2 ~ PopulationSkewness), df)
