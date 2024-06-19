@@ -32,7 +32,7 @@ function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::
 end
 ```
 
-This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this \`r\` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis.
+This function creates a sampling distribution, using the given distribution and its parameters. It takes samples of size `n` and calculates each sample's `statistic`. It does this `r` times to create a sampling distribution and mitigate any concerns of natural sampling variability. It returns this sampling distribution for further analysis.
 
 ```{julia Single distribution analysis}
 #| output: false
@@ -43,7 +43,7 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
 
     # Standardizing the values to look at tail probabilities
     z_scores = zeros(r)
-    zscore!(z_scores, statistics, mean(statistics), std(statistics))
+    zscore!(z_scores, statistics, μ, σ / sqrt(n))
 
     # Calculating tail probabilities
     upper = sum(z_scores .>= critical) / r
@@ -58,7 +58,7 @@ This function then finds the upper and lower tails of this sampling distribution
 ```{julia Analyzing multiple distributions}
 #| output: false
 function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector{Int}, critical::Function, distributions, params=false)::DataFrame
-    println("Analyzing sampling distributions of $(statistic) with $(r) repetitions")
+    println("Analyzing sampling distributions of $(statistic)s with $(r) repetitions")
     # Setting up the results we're interested in
     results = DataFrame(
         "Distribution" => String[],
@@ -100,6 +100,8 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
 end
 ```
 
+We run the analysis on multiple distributions to and sample sizes to simulate the data that we then analyze later on.
+
 ```{julia Generate data}
 #| output: false
 function main(r)
@@ -122,7 +124,7 @@ function main(r)
     analyze_distributions(mean, 1, sample_sizes, zstar, distributions)
     # analyze_distributions(t_score, 1, sample_sizes, tstar, distributions, true)
 
-    # Warning: this code will take a very long time to run if used with a large r. We used r = 10_000_000
+    # Warning: this code will take a very long time to run if used with a large r. We used r = 1_000_000
     @time means::DataFrame = analyze_distributions(mean, r, sample_sizes, zstar, distributions)
     CSV.write("means.csv", means)
 
@@ -131,7 +133,6 @@ function main(r)
 
     nothing
 end
-
 main(1_000_000) # remove this if you want to render the document but already have data
 ```
 
@@ -201,14 +202,19 @@ This section is dedicated to creating data and graphs for the poster.
 function graphing(r)
     d = Exponential()
     n = 30
-
+    μ = mean(d)
+    σ = std(d)
     # Creating sampling distributions
     exponential30 = sampling_distribution(mean, d, n, r)
-    exponential30std = standardize(exponential30)
+    exponential30std = zeros(r)
+    zscore!(exponential30std, exponential30, μ, σ / sqrt(n))
+    # exponential30std = standardize(exponential30)
 
     n = 150
     exponential150 = sampling_distribution(mean, d, n, r)
-    exponential150std = standardize(exponential150)
+    exponential150std = zeros(r)
+    zscore!(exponential150std, exponential150, μ, σ / sqrt(n))
+    # exponential150std = standardize(exponential150)
 
     graphing = DataFrame(
         "Exponential 30" => exponential30,
@@ -225,7 +231,7 @@ end
 graphing(1_000_000)
 ```
 
-We create the data used to graph the exponential sampling distributions
+We create the data used to graph the exponential sampling distributions, demonstrating the flexibility and benefits of our abstracted function design.
 
 ```{r Graphing sampling distributions}
 #| message: false
@@ -346,4 +352,4 @@ read_csv("means.csv") |>
 ggsave("Poster//Tail_Weights.png", width = 12, height = 6.75, dpi = 1000)
 ```
 
-The convergence rate of a sampling distribution, as shown by the Berry-Essen theorem, is related to the third absolute normalized moment. Skewness directly affects the convergence rate as our skewness shows, and this graph shows the change in tailedness of skewed distributions as sample size changes. The highlighted area is what used as a threshold for normality–both tails being within 20% of 0.025.
+This graph shows the change in tailedness of skewed distributions as sample size changes. The highlighted area is what used as a threshold for normality–both tails being within 20% of 0.025.
