@@ -1,3 +1,4 @@
+# Toward a robust and simple guideline for checking the Central Limit Theorem
   In statistical practice, many introductory statistical procedures require
   the sampling distribution
   of means to be approximately normal. Most students learn a simplified check
