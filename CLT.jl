@@ -177,7 +177,7 @@ function adjustedSkew(x)
     sqrt(n * (n - 1)) / (n - 2) * skewness(x)
 end
 
-function RAS(x; d)
+function RAS(x, d)
     # sample skewness/population skewness
     adjustedSkew(x) / skewness(d)
 end
@@ -216,13 +216,86 @@ function testing(r=1_000_000)
 end
 
 analyze_distributions(adjustedSkew, 1, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500], n -> quantile(Normal(), 0.975), [Gamma(16), LogNormal(0, 0.25), Gamma(4), Gamma(2), LogNormal(0, 0.5), Gamma(1), Exponential(), Gamma(0.64), LogNormal(0, 0.75)])
-df = analyze_distributions(adjustedSkew, 1_000_000, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500], n -> quantile(Normal(), 0.975), [Gamma(16), LogNormal(0, 0.25), Gamma(4), Gamma(2), LogNormal(0, 0.5), Gamma(1), Exponential(), Gamma(0.64), LogNormal(0, 0.75)])
+df = analyze_distributions(adjustedSkew, 10_000_000, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500], n -> quantile(Normal(), 0.975), [Gamma(16), LogNormal(0, 0.25), Gamma(4), Gamma(2), LogNormal(0, 0.5), Gamma(1), Exponential(), Gamma(0.64), LogNormal(0, 0.75)])
 println(df)
+
+# plot median against sample size
+scatter(df."Sample Size", df."Median", group=df.Distribution, xlabel="Sample Size", ylabel="Median", title="Median vs Sample Size", legend=false)
 
 df."Ratio" = df."Median" ./ df."Skewness"
 
 using Plots
+# plot median/skewness ratio against sample size
+scatter(df."Sample Size", df."Ratio", group=df.Distribution, xlabel="Sample Size", ylabel="Median/Skewness Ratio", title="Median/Skewness Ratio vs Sample Size", legend=false)
+using Polynomials
+
+df1 = df[df.Distribution.=="Gamma{Float64}(α=4.0, θ=1.0)", :]
+f = Polynomials.fit(log.(df1."Sample Size"), df1."Ratio", 2)
+roots(f)
 scatter(log.(df."Sample Size"), (df."Ratio"), group=df.Distribution, legend=false, xlabel="log(Sample Size)", ylabel="Median/Skewness Ratio", title="Median/Skewness Ratio vs Sample Size")
+plot!(f, extrema(log.(df1."Sample Size"))...)
+
+y = df1."Ratio"
+ybar = mean(y)
+yhat = f.(log.(df1."Sample Size"))
+SSres = sum((y .- yhat) .^ 2)
+SStot = sum((y .- ybar) .^ 2)
+rsq = 1 - SSres / SStot
+
+function PolyTest(x::Vector, y::Vector)
+    f = Polynomials.fit(x, y, 2)
+    roots(f)
+    y = y
+    ybar = mean(y)
+    yhat = f.(x)
+    SSres = sum((y .- yhat) .^ 2)
+    SStot = sum((y .- ybar) .^ 2)
+    rsq = 1 - SSres / SStot
+
+    # return (roots(f), rsq)
+    # return roots(f)[2]
+    return (f, roots(f))
+end
+
+# γ = 1, Polynomial(-0.02164055193306798 + 0.31642520918677736*x - 0.025403136003281923*x^2)
+# γ = 2, Polynomial(0.0006983582258960104 + 0.2858045054487282*x - 0.021454522288294926*x^2)
+
+df1 = df[df.Distribution.=="Exponential{Float64}(θ=1.0)", :]
+PolyTest(log.(df1."Sample Size"), df1."Ratio")
+
+results = DataFrame(
+    "Distribution" => String[],
+    "Poly" => Polynomial[],
+    "Root" => Float64[],
+    "Root2" => Float64[]
+)
+for distro in unique(df.Distribution)
+    df1 = df[df.Distribution.==distro, :]
+    temp = PolyTest(log.(df1."Sample Size"), df1."Ratio")
+    push!(results, (distro, temp[1], temp[2][1], temp[2][2]))
+end
+results."PopSkew" = [2, 2.5, 2, 0.5, sqrt(2), 1, 0.778, 1.75, 3.263]
+cfs = coeffs.(results."Poly")
+# extract the first element from ever element in cfs
+results."a" = [c[1] for c in cfs]
+results."b" = [c[2] for c in cfs]
+results."c" = [c[3] for c in cfs]
+sort!(results, :PopSkew)
+println(results)
+for pol in results.Poly
+    println(pol)
+end
+
+# plot b vs popskew
+scatter(results."PopSkew", results."b", xlabel="Population Skewness", ylabel="b", title="b vs Population Skewness", legend=false)
+# plot c vs popskew
+scatter(results."PopSkew", results."c", xlabel="Population Skewness", ylabel="c", title="c vs Population Skewness", legend=false)
+
+f = Polynomials.fit(results."PopSkew", results."Root", 2)
+scatter(results."PopSkew", results."Root", xlabel="Population Skewness", ylabel="Root", title="Root vs Population Skewness", legend=false)
+plot!(f, extrema(log.(results."PopSkew"))...)
+
+
 # lin reg of median/skewness ratio against sample size
 using GLM
 df."Logn" = log.(df."Sample Size")
@@ -324,4 +397,8 @@ scatter(log.(df."Sample Size"), df."Ratio", group=df.Distribution, xlabel="Log S
 # println(mean(x - y))
 
 # analysis(mean, Exponential(), 75, 1_000_000, mean(Exponential()), std(Exponential()), 1.96)
+
+
+
+# If I have a sample of size n, with (adjusted) skewness g, what is a good estimate for population skewness G to put into n>=36*G^2
 
