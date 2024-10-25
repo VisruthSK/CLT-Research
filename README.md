@@ -10,3 +10,7 @@
   skewed populations with different sample sizes. We hope to provide students and
   practitioners with a slightly more refined rule that allows a way to operationalize
   the degree of skewness in statistical analysis.
+
+![Paper](/CLT.pdf)
+
+![Poster](/Poster/Poster.png)
