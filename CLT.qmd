@@ -142,33 +142,36 @@ We used r = 1_000_000 repetitions to create our sampling distributions of means 
 
 ```{r setup}
 library(tidyverse)
-library(flextable)
+# library(flextable)
 
+bounds <- 0.025 * 20 / 100 * c(-1, 1) + 0.025
 df <- read_csv("means.csv") |>
   group_by(Distribution) |>
   mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
   filter(
-    `Lower Tail` >= 0.02 & `Lower Tail` <= 0.03,
-    `Upper Tail` >= 0.02 & `Upper Tail` <= 0.03
+    `Lower Tail` >= bounds[1] & `Lower Tail` <= bounds[2],
+    `Upper Tail` >= bounds[1] & `Upper Tail` <= bounds[2]
   ) |>
   # filter(`Sampling Skewness` <= 1/6) |>
   filter(`Sample Size` == min(`Sample Size`)) |> # get the smallest sample size for each distribution
   select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
   arrange(Skewness, Distribution)
 
-ft <- flextable(df) |>
-  colformat_double(j = c("Skewness", "Sampling Skewness"), digits = 3) |>
-  font(fontname = "Trebuchet MS") |>
-  autofit()
+df
+# ft <- flextable(df) |>
+#   colformat_double(j = c("Skewness", "Sampling Skewness"), digits = 3) |>
+#   font(fontname = "Trebuchet MS") |>
+#   autofit()
 
-save_as_image(ft, path = "Poster//table.png", res = 2000)
-ft
+# save_as_image(ft, path = "Poster//table.png", res = 2000)
+# ft
 ```
 
 Now that we have the data, we may proceed with our analysis. We judged normality by looking at tailed-ness; we treated a distribution as normal if both of its tails were within 20% of 0.025 as that is what we would expect from a Normal distribution.
 
 ```{r Fitting the model}
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
+
 df |>
   ggplot(aes(x = sqrt(`Sample Size`), y = Skewness, label = Distribution)) +
   geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed", linewidth = 1.5) +
@@ -187,9 +190,61 @@ df |>
     axis.text = element_text(size = 12)
   )
 
-ggsave("Poster//Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 1000)
+# ggsave("Poster//Skew_Sample_Size.png", width = 15, height = 8.5, dpi = 1000)
 
 summary(model)
+```
+
+<!-- 
+30: 0.27029
+20: 0.175249
+15: 0.1136466
+10: 0.090685
+9: 0.079275 
+-->
+
+<!-- sqrt(`Sample Size`)  0.165237    -->
+
+```{r}
+n_per_bound <- function(percent) {
+  bounds <- 0.025 * percent / 100 * c(-1, 1) + 0.025
+  temp <- read_csv("means.csv", show_col_types = FALSE) |>
+    group_by(Distribution) |>
+    mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
+    filter(
+      `Lower Tail` >= bounds[1] & `Lower Tail` <= bounds[2],
+      `Upper Tail` >= bounds[1] & `Upper Tail` <= bounds[2]
+    ) |>
+    filter(`Sample Size` == min(`Sample Size`)) |> # get the smallest sample size for each distribution
+    select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
+    arrange(Skewness, Distribution)
+
+  stopifnot(nrow(temp) == 9)
+
+  coef(lm(Skewness ~ sqrt(`Sample Size`), temp))["sqrt(`Sample Size`)"]
+}
+```
+
+```{r}
+x <- 30:9
+y <- unname(sapply(x, n_per_bound))
+y2 <- y^-2
+
+plot(x, y, type = "b")
+plot(x, y2, type = "b")
+
+linmanuealmodel <- lm(y ~ x)
+summary(linmanuealmodel)
+
+# multiply this and your percent error bound (0,100), then neg square it to get the constant part of sample size req
+sample_size <- \(percent_bound) (unname(coef(linmanuealmodel)[2]) * percent_bound)^-2
+
+# n >= sample_size(20) * skewness^2 for 20% error on tail probs
+# n >= sample_size(10) * skewness^2 for 10% error, etc.
+
+yhats <- sapply(x, \(x) 130.2845 * x^-2)
+names(yhats) <- x
+sqrt(mean((y - yhats)^2))
 ```
 
 We ran a linear regression to determine that if $n\geq36*skewness^2$ the sampling distribution of the means will be approximately normal as prior defined. We also plot the relationship between skewness and empirical sampling size that we found.
@@ -312,7 +367,7 @@ for (col_name in colnames(graphing)) {
 
   combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
 
-  ggsave(paste0("Poster//", str_replace(str_sub(col_name,1,-10)," ", "_"), ".png"), plot = combined, width = 12, height = 6.75, dpi = 200)
+  ggsave(paste0("Poster//", str_replace(str_sub(col_name, 1, -10), " ", "_"), ".png"), plot = combined, width = 12, height = 6.75, dpi = 200)
 }
 ```
 

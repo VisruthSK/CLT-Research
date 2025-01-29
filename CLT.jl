@@ -106,7 +106,11 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
 end
 
 function main(r)
-    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
+    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175]
+    append!(sample_sizes, 200:50:1500)
+    append!(sample_sizes, 1500:100:2000)
+    unique!(sample_sizes)
+
     distributions = [
         Gamma(16),
         LogNormal(0, 0.25),
@@ -164,5 +168,6 @@ function graphing(r)
     nothing
 end
 
+# main(100_000)
 main(1_000_000)
-graphing(1_000_000)
+# graphing(1_000_000)
