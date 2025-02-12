@@ -15,9 +15,12 @@ library(moments)
 set.seed(0)
 r <- 1000000
 
+# looking at moments::skewness we can see it calculates "g1", being m3/m2^3/2;
+# we can get G1 as defined in Joanes, Gill by the following adjustment.
+# They claim it performs better as an estimator for non-normal distributions
 adjusted_skewness <- function(x) {
   n <- length(x)
-  sqrt(n * (n - 1)) / (n - 2) * moments::skewness(x)
+  sqrt(n * (n - 1)) / (n - 2) * skewness(x)
 }
 
 temp <- rgamma(30, 16)
@@ -33,18 +36,63 @@ adjusted_skewness(temp)
 
 test <- function(distro, r) {
   temp <- replicate(r, adjusted_skewness(eval(distro)))
-
   # hist(temp)
   print(mean(temp))
-
   temp
 }
 
-gamma1016 <- test(expr(rgamma(10, 16)), r)
 
+
+# Gamma 16 distro, skew = 0.5
+ns <- seq(10, 250, 20)
+datans <- lapply(ns, function(n) test(expr(rgamma(!!n, 16)), r))
+means <- datans |>
+  lapply(mean) |>
+  unlist()
+
+plot(ns, means)
+michaelis_menten <- function(n, Vmax, Km) {
+  Vmax * n / (Km + n)
+}
+model <- nls(means ~ michaelis_menten(ns, Vmax, Km),
+  start = list(Vmax = 0.5, Km = median(ns))
+)
+summary(model)
+Vmax_est <- coef(model)["Vmax"]
+Km_est <- coef(model)["Km"]
+plot(ns, means, xlab = "n", ylab = "Mean", main = "Michaelis-Menten Fit")
+curve(michaelis_menten(x, Vmax_est, Km_est), add = TRUE, col = "red")
+
+
+# Expo distro, skew = 2
+ns <- seq(10, 250, 20)
+datans <- lapply(ns, function(n) test(expr(rexp(!!n)), r))
+means <- datans |>
+  lapply(mean) |>
+  unlist()
+
+plot(ns, means)
+model <- nls(means ~ michaelis_menten(ns, Vmax, Km),
+  start = list(Vmax = 2, Km = median(ns))
+)
+summary(model)
+Vmax_est <- coef(model)["Vmax"]
+Km_est <- coef(model)["Km"]
+plot(ns, means, xlab = "n", ylab = "Mean", main = "Michaelis-Menten Fit")
+curve(michaelis_menten(x, Vmax_est, Km_est), add = TRUE, col = "red")
+
+
+
+
+
+
+
+
+
+
+gamma1016 <- test(expr(rgamma(10, 16)), r) # skew 0.5
 gamma3016 <- test(expr(rgamma(30, 16)), r) # skew 0.5
 exp301 <- test(expr(rexp(30)), r) # skew 2
-
 
 boostrapped_skewness <- function(x) {
   adjusted_skewness(sample(x, length(x), TRUE))
