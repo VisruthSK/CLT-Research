@@ -13,7 +13,7 @@ library(moments)
 # ]
 
 set.seed(0)
-r <- 1000000
+r <- 100000
 
 # looking at moments::skewness we can see it calculates "g1", being m3/m2^3/2;
 # we can get G1 as defined in Joanes, Gill by the following adjustment.
@@ -41,8 +41,6 @@ test <- function(distro, r) {
   temp
 }
 
-
-
 # Gamma 16 distro, skew = 0.5
 ns <- seq(10, 250, 20)
 datans <- lapply(ns, function(n) test(expr(rgamma(!!n, 16)), r))
@@ -54,7 +52,8 @@ plot(ns, means)
 michaelis_menten <- function(n, Vmax, Km) {
   Vmax * n / (Km + n)
 }
-model <- nls(means ~ michaelis_menten(ns, Vmax, Km),
+model <- nls(
+  means ~ michaelis_menten(ns, Vmax, Km),
   start = list(Vmax = 0.5, Km = median(ns))
 )
 summary(model)
@@ -62,7 +61,6 @@ Vmax_est <- coef(model)["Vmax"]
 Km_est <- coef(model)["Km"]
 plot(ns, means, xlab = "n", ylab = "Mean", main = "Michaelis-Menten Fit")
 curve(michaelis_menten(x, Vmax_est, Km_est), add = TRUE, col = "red")
-
 
 # Expo distro, skew = 2
 ns <- seq(10, 250, 20)
@@ -72,7 +70,8 @@ means <- datans |>
   unlist()
 
 plot(ns, means)
-model <- nls(means ~ michaelis_menten(ns, Vmax, Km),
+model <- nls(
+  means ~ michaelis_menten(ns, Vmax, Km),
   start = list(Vmax = 2, Km = median(ns))
 )
 summary(model)
@@ -81,14 +80,55 @@ Km_est <- coef(model)["Km"]
 plot(ns, means, xlab = "n", ylab = "Mean", main = "Michaelis-Menten Fit")
 curve(michaelis_menten(x, Vmax_est, Km_est), add = TRUE, col = "red")
 
+# Fix n, population skewness vs mean sampling distro skewnwess
+n <- 10
+sampling_distro16 <- test(expr(rgamma(!!n, 16)), r)
+population_skew16 <- 0.5
+sampling_distro4 <- test(expr(rgamma(!!n, 4)), r)
+population_skew4 <- 1
+sampling_distro2 <- test(expr(rgamma(!!n, 2)), r)
+population_skew2 <- sqrt(2)
+sampling_distro1 <- test(expr(rgamma(!!n, 1)), r)
+population_skew1 <- 2
+sampling_distro64 <- test(expr(rgamma(!!n, 0.64)), r)
+population_skew64 <- 2.5
 
+# population skewness as response
+# put these data into table, three columns pop skewness, sample size, mean sampling skewness
+# each row is a different distro
 
+data_func <- function(distro, n, r, ...) {
+  replicate(r, adjusted_skewness(distro(n, ...)))
 
+  # distro(n, ...)
+  # sampling_distro <- test(expr(!!distro(!!n, 1)), r)
+  # sampling_distro
+}
 
+data_func <- function(distro, n, r, ...) {
+  replicate(r, adjusted_skewness(distro(n, ...)))
+}
 
+data_func(rgamma, n, 10, shape = 16)
 
+popskews <- c(
+  population_skew16,
+  population_skew4,
+  population_skew2,
+  population_skew1,
+  population_skew64
+)
+samp_skews <- c(
+  mean(sampling_distro16),
+  mean(sampling_distro4),
+  mean(sampling_distro2),
+  mean(sampling_distro1),
+  mean(sampling_distro64)
+)
 
+plot(popskews, samp_skews)
 
+# find pathways to help students better connect with the material, talk about both in context of teaching stats.
 
 gamma1016 <- test(expr(rgamma(10, 16)), r) # skew 0.5
 gamma3016 <- test(expr(rgamma(30, 16)), r) # skew 0.5
@@ -107,21 +147,23 @@ hist(boot_skew)
 mean(boot_skew)
 mean(boot_skew <= 0.5)
 
-sample_size <- function(x) -5.19 * x^4 - 1.44 * x^3 + 5.65 * x^2 + 14.75 * x + 70.07
+sample_size <- function(x)
+  -5.19 * x^4 - 1.44 * x^3 + 5.65 * x^2 + 14.75 * x + 70.07
 skews <- c(0.5, 0.778, 1, 1.414, 1.75, 2, 2.5, 3.263)
 sample_size_data <- sapply(skews, function(x) sample_size(x))
 names(sample_size_data) <- skews
 
-
 wrap_test <- function(distro, r) mean(test(distro, r))
-
 
 ns <- seq(5, 105, 10)
 skew_over_n <- map_dbl(ns, function(x) wrap_test(expr(rgamma(!!x, 16)), r))
 names(skew_over_n) <- ns
 exp_skew_over_n <- map_dbl(ns, function(x) wrap_test(expr(rgamma(!!x, 1)), r))
 names(exp_skew_over_n) <- ns
-lnorm_skew_over_n <- map_dbl(ns, function(x) wrap_test(expr(rlnorm(!!x, 0, .75)), r))
+lnorm_skew_over_n <- map_dbl(
+  ns,
+  function(x) wrap_test(expr(rlnorm(!!x, 0, .75)), r)
+)
 names(lnorm_skew_over_n) <- ns
 
 plot(ns, skew_over_n)
