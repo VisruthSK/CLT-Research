@@ -93,9 +93,82 @@ population_skew1 <- 2
 sampling_distro64 <- test(expr(rgamma(!!n, 0.64)), r)
 population_skew64 <- 2.5
 
+
+
+
+
+
+
+
+
+
 # population skewness as response
 # put these data into table, three columns pop skewness, sample size, mean sampling skewness
 # each row is a different distro
+adjusted_skewness <- function(x) {
+  n <- length(x)
+  sqrt(n * (n - 1)) / (n - 2) * moments::skewness(x)
+}
+test <- \(distro, r) replicate(r, adjusted_skewness(eval(distro)))
+
+generate_data <- function(n, r, population_skews) {
+  raw_distributions <- list(
+    test(expr(rgamma(!!n, 16)), r),
+    test(expr(rlnorm(!!n, 0, 0.25)), r),
+    test(expr(rgamma(!!n, 4)), r),
+    test(expr(rgamma(!!n, 2)), r),
+    test(expr(rlnorm(!!n, 0, 0.5)), r),
+    test(expr(rgamma(!!n, 1)), r),
+    test(expr(rexp(!!n, 1)), r),
+    test(expr(rgamma(!!n, 0.64)), r),
+    test(expr(rlnorm(!!n, 0, 0.75)), r)
+  )
+  mss <- map_dbl(raw_distributions, mean)
+
+  data.frame(
+    pop_skewness = population_skews,
+    sample_size = n,
+    mean_sampling_skewness = mss
+  )
+}
+
+population_skews <- c(
+  0.5,
+  (exp(0.25^2) + 2) * sqrt(exp(0.25^2) - 1),
+  1,
+  sqrt(2),
+  (exp(0.5^2) + 2) * sqrt(exp(0.5^2) - 1),
+  2,
+  2,
+  2.5,
+  (exp(0.75^2) + 2) * sqrt(exp(0.75^2) - 1)
+)
+ns <- c(seq(10, 50, 10), seq(50, 100, 25)) |> unique()
+r <- 1e5
+
+skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
+skew_data |> write_csv(here::here("skew_data"))
+# skew_data <- read_csv(here::here("skew_data"))
+ggplot(skew_data, aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(as.character(sample_size)))) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Population Skewness vs. Mean Sampling Skewness with Regression Lines",
+    x = "Population Skewness",
+    y = "Mean Sampling Skewness",
+    color = "Sample Size"
+  ) +
+  theme_minimal()
+
+
+
+
+
+
+
+
+
+
 
 data_func <- function(distro, n, r, ...) {
   replicate(r, adjusted_skewness(distro(n, ...)))
@@ -147,8 +220,9 @@ hist(boot_skew)
 mean(boot_skew)
 mean(boot_skew <= 0.5)
 
-sample_size <- function(x)
+sample_size <- function(x) {
   -5.19 * x^4 - 1.44 * x^3 + 5.65 * x^2 + 14.75 * x + 70.07
+}
 skews <- c(0.5, 0.778, 1, 1.414, 1.75, 2, 2.5, 3.263)
 sample_size_data <- sapply(skews, function(x) sample_size(x))
 names(sample_size_data) <- skews
