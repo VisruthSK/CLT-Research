@@ -147,7 +147,8 @@ r <- 1e6
 skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
 skew_data |> write_csv(here::here("skew_data"))
 # skew_data <- read_csv(here::here("skew_data"))
-ggplot(skew_data, aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(as.character(sample_size)))) +
+skew_data |>
+  ggplot(aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(as.character(sample_size)))) +
   geom_point() +
   geom_line() +
   geom_smooth(method = "lm", se = FALSE) +
@@ -158,6 +159,27 @@ ggplot(skew_data, aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(
     color = "Sample Size"
   ) +
   theme_minimal()
+
+skew_data |>
+  mutate(percent = mean_sampling_skewness / pop_skewness) |>
+  ggplot(aes(x = sample_size, y = percent, color = fct(as.character(pop_skewness)))) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 1) +
+  # geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  geom_text(
+    data = skew_data |>
+      mutate(percent = mean_sampling_skewness / pop_skewness) |>
+      group_by(pop_skewness) |>
+      slice_tail(n = 1),
+    aes(label = round(percent, 2), x = sample_size + 0.5),
+    show.legend = FALSE,
+    hjust = 0,
+    size = 3,
+    fontface = "bold"
+  )
+
 
 
 
