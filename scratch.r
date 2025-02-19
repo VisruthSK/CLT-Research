@@ -30,6 +30,7 @@ generate_data <- function(n, r, population_skews) {
     test(expr(rgamma(!!n, 2)), r),
     test(expr(rlnorm(!!n, 0, 0.5)), r),
     test(expr(rgamma(!!n, 1)), r),
+    test(expr(rf(!!n, 10, 15)), r),
     test(expr(rgamma(!!n, 0.64)), r),
     test(expr(rlnorm(!!n, 0, 0.75)), r)
   )
@@ -42,21 +43,24 @@ generate_data <- function(n, r, population_skews) {
   )
 }
 
+skew_f <- \(d1, d2) ((2 * d1 + d2 - 2) * sqrt(8 * (d2 - 4))) / ((d2 - 6) * sqrt(d1 * (d1 + d2 - 2)))
+skew_lnorm <- \(sigma) (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
 population_skews <- c(
   0.5,
-  (exp(0.25^2) + 2) * sqrt(exp(0.25^2) - 1),
+  skew_lnorm(0.25),
   1,
   sqrt(2),
-  (exp(0.5^2) + 2) * sqrt(exp(0.5^2) - 1),
+  skew_lnorm(0.5),
   2,
+  skew_f(10, 15),
   2.5,
-  (exp(0.75^2) + 2) * sqrt(exp(0.75^2) - 1)
+  skew_lnorm(0.75)
 )
 ns <- c(seq(10, 50, 10), seq(50, 100, 25)) |> unique()
 r <- 1e6
 
 skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
-skew_data |> write_csv(here::here("skew_data"))
+skew_data |> write_csv(here::here("skew_data.csv"))
 # skew_data <- read_csv(here::here("skew_data"))
 skew_data |>
   ggplot(aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(as.character(sample_size)))) +
