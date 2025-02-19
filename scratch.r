@@ -119,7 +119,6 @@ generate_data <- function(n, r, population_skews) {
     test(expr(rgamma(!!n, 2)), r),
     test(expr(rlnorm(!!n, 0, 0.5)), r),
     test(expr(rgamma(!!n, 1)), r),
-    test(expr(rexp(!!n, 1)), r),
     test(expr(rgamma(!!n, 0.64)), r),
     test(expr(rlnorm(!!n, 0, 0.75)), r)
   )
@@ -139,18 +138,18 @@ population_skews <- c(
   sqrt(2),
   (exp(0.5^2) + 2) * sqrt(exp(0.5^2) - 1),
   2,
-  2,
   2.5,
   (exp(0.75^2) + 2) * sqrt(exp(0.75^2) - 1)
 )
 ns <- c(seq(10, 50, 10), seq(50, 100, 25)) |> unique()
-r <- 1e5
+r <- 1e6
 
 skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
 skew_data |> write_csv(here::here("skew_data"))
 # skew_data <- read_csv(here::here("skew_data"))
 ggplot(skew_data, aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(as.character(sample_size)))) +
   geom_point() +
+  geom_line() +
   geom_smooth(method = "lm", se = FALSE) +
   labs(
     title = "Population Skewness vs. Mean Sampling Skewness with Regression Lines",
