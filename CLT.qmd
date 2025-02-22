@@ -234,7 +234,6 @@ n_per_bound <- function(percent) {
 ```{r}
 x <- 30:9
 y <- unname(sapply(x, n_per_bound))
-y2 <- y^-2
 
 data.frame(x, y) |>
   ggplot(aes(x = x, y = y)) +
@@ -252,26 +251,20 @@ data.frame(x, y) |>
     axis.text = element_text(size = 12)
   )
 
-ggsave("Poster//20_percent.png", width = 15, height = 8.5, dpi = 1000)
-
-plot(x, y, type = "b")
-# plot(x, y2, type = "b")
+# ggsave("Poster//20_percent.png", width = 15, height = 8.5, dpi = 1000)
 
 linmanuealmodel <- lm(y ~ x)
 summary(linmanuealmodel)
 
-# # multiply this and your percent error bound (0,100), then neg square it to get the constant part of sample size req
-# n >= sample_size(20) * skewness^2 for 20% error on tail probs
-# n >= sample_size(10) * skewness^2 for 10% error, etc.
-# sample_size <- \(percent_bound)
-#   (unname(coef(linmanuealmodel)[2]) * percent_bound)^-2
-
-yhats <- sapply(x, \(x) 130.2845 * x^-2)
-names(yhats) <- x
-sqrt(mean((y - yhats)^2))
+(unname(coef(linmanuealmodel)[2]) * 100)^-2
 
 sample_size <- \(percent_bound)
-  unname(predict(linmanuealmodel, data.frame(x = percent_bound)))
+  (unname(coef(linmanuealmodel)[2]) * percent_bound)^-2
+
+sample_size(20)
+
+# sample_size <- \(percent_bound)
+#   unname(predict(linmanuealmodel, data.frame(x = percent_bound)))
 
 yhats <- sapply(x, \(x) sample_size(x)^(-1 / 2))
 names(yhats) <- x
