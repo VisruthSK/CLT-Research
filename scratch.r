@@ -20,19 +20,20 @@ adjusted_skewness <- function(x) {
   n <- length(x)
   sqrt(n * (n - 1)) / (n - 2) * moments::skewness(x)
 }
-test <- \(distro, r) replicate(r, adjusted_skewness(eval(distro)))
+sampling_distribution <- \(distro, r)
+  replicate(r, adjusted_skewness(eval(distro)))
 
 generate_data <- function(n, r, population_skews) {
   raw_distributions <- list(
-    test(expr(rgamma(!!n, 16)), r),
-    test(expr(rlnorm(!!n, 0, 0.25)), r),
-    test(expr(rgamma(!!n, 4)), r),
-    test(expr(rgamma(!!n, 2)), r),
-    test(expr(rlnorm(!!n, 0, 0.5)), r),
-    test(expr(rgamma(!!n, 1)), r),
-    test(expr(rf(!!n, 10, 15)), r),
-    test(expr(rgamma(!!n, 0.64)), r),
-    test(expr(rlnorm(!!n, 0, 0.75)), r)
+    sampling_distribution(expr(rgamma(!!n, 16)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.25)), r),
+    sampling_distribution(expr(rgamma(!!n, 4)), r),
+    sampling_distribution(expr(rgamma(!!n, 2)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.5)), r),
+    sampling_distribution(expr(rgamma(!!n, 1)), r),
+    sampling_distribution(expr(rf(!!n, 10, 15)), r),
+    sampling_distribution(expr(rgamma(!!n, 0.64)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.75)), r)
   )
   mss <- map_dbl(raw_distributions, mean)
 
@@ -61,9 +62,9 @@ population_skews <- c(
 ns <- c(seq(10, 50, 10), seq(50, 200, 25)) |> unique()
 r <- 1e5
 
-skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
+# skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
 # skew_data |> write_csv(here::here("skew_data.csv"))
-# skew_data <- read_csv(here::here("skew_data"))
+skew_data <- read_csv(here::here("skew_data.csv"))
 skew_data |>
   ggplot(
     aes(
@@ -110,6 +111,13 @@ skew_data |>
 # TODO: look at each predictor separately
 model <- lm(pop_skewness ~ sample_size + mean_sampling_skewness, skew_data)
 summary(model)
+
+model1 <- lm(
+  log(pop_skewness) ~ log(sample_size) + log(mean_sampling_skewness),
+  skew_data
+)
+summary(model1)
+
 # fix normal distro
 # sampling distribution of means with n=10
 # look at percent error in tail probs like in paper
@@ -117,3 +125,32 @@ summary(model)
 # fix expo distro
 # sampling distro with again n=30
 # look at percent error in tail probs
+
+n <- 10
+r <- 1e6
+bounds <- qnorm(0.975) * c(-1, 1)
+percent_error <- \(obs, expe) abs((obs - expe) / expe * 100)
+
+graphing_df <- read_csv(here::here("graphing.csv"))
+hist(graphing_df$`Exponential 30 Z-Scores`)
+hist(graphing_df$`Exponential 150 Z-Scores`)
+hist(graphing_df$`Normal 5 Z-Scores`)
+hist(graphing_df$`Normal 10 Z-Scores`)
+
+tail_percents <- function(sample_distro) {
+  tail_values <- c(
+    mean(sample_distro < bounds[1]),
+    mean(sample_distro > bounds[2])
+  )
+
+  list(
+    tail_values = tail_values,
+    percent_errors = percent_error(tail_values, c(0.025, 0.025))
+  )
+}
+
+tail_percents(graphing_df$`Exponential 30 Z-Scores`)
+tail_percents(graphing_df$`Exponential 150 Z-Scores`)
+tail_percents(graphing_df$`Normal 5 Z-Scores`)
+tail_percents(graphing_df$`Normal 10 Z-Scores`)
+tail_percents(graphing_df$`Normal 30 Z-Scores`)
