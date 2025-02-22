@@ -170,7 +170,13 @@ Now that we have the data, we may proceed with our analysis. We judged normality
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
 df |>
   ggplot(aes(x = sqrt(`Sample Size`), y = Skewness, label = Distribution)) +
-  geom_abline(slope = coef(model)[2], intercept = coef(model)[1], color = "blue", linetype = "dashed", linewidth = 1.5) +
+  geom_abline(
+    slope = coef(model)[2],
+    intercept = coef(model)[1],
+    color = "blue",
+    linetype = "dashed",
+    linewidth = 1.5
+  ) +
   geom_line(linewidth = 1.5) +
   geom_point(size = 3) +
   ggrepel::geom_label_repel(seed = 0, nudge_x = 1, size = 5) +
@@ -227,11 +233,9 @@ graphing(1_000_000)
 
 We create the data used to graph the exponential sampling distributions.
 
-```{r Graphing sampling distributions}
+```{r Graphing exponential sampling distributions}
 #| message: false
-graphing <- read_csv("graphing.csv") |>
-  select("Exponential 30 Z-Scores", "Exponential 150 Z-Scores")
-
+graphing <- read_csv("graphing.csv")
 # Create exponential population plot
 x <- seq(0, 5, length.out = 100)
 y <- dexp(x, rate = 1)
@@ -248,7 +252,10 @@ sub <- ggplot() +
     axis.ticks = element_blank()
   )
 
-for (col_name in colnames(graphing)) {
+for (col_name in colnames(
+  graphing |>
+    select("Exponential 30 Z-Scores", "Exponential 150 Z-Scores")
+)) {
   sample_size <- str_extract(col_name, "\\d+")
 
   upper <- sum(graphing[[col_name]] >= 1.96) / length(graphing[[col_name]])
@@ -258,42 +265,52 @@ for (col_name in colnames(graphing)) {
     geom_histogram(bins = 100, aes(y = after_stat(density))) +
     stat_function(
       fun = dnorm,
-      args = list(mean = mean(graphing[[col_name]]), sd = sd(graphing[[col_name]])),
+      args = list(
+        mean = mean(graphing[[col_name]]),
+        sd = sd(graphing[[col_name]])
+      ),
       color = "blue",
       linewidth = 1.25
     ) +
     geom_vline(xintercept = 1.96, linetype = "dashed", color = "blue") +
-    annotate("text",
+    annotate(
+      "text",
       x = 2.5,
       y = 0.1,
       label = "1.96 SDs",
       color = "blue",
       size = 5
     ) +
-    annotate("text",
+    annotate(
+      "text",
       x = -2.5,
       y = 0.1,
       label = "-1.96 SDs",
       color = "blue",
       size = 5
     ) +
-    annotate("text",
+    annotate(
+      "text",
       x = 3,
       y = 0.05,
-      label = round(upper, 3),
+      label = round(upper, 4),
       color = "black",
       size = 5
     ) +
-    annotate("text",
+    annotate(
+      "text",
       x = -3,
       y = 0.05,
-      label = round(lower, 3),
+      label = round(lower, 4),
       color = "black",
       size = 5
     ) +
     geom_vline(xintercept = -1.96, linetype = "dashed", color = "blue") +
     labs(
-      title = paste("Sampling Distribution of Standardized Means for n =", sample_size),
+      title = paste(
+        "Sampling Distribution of Standardized Means for n =",
+        sample_size
+      ),
       x = "Z Score",
       y = "Frequency"
     ) +
@@ -306,17 +323,134 @@ for (col_name in colnames(graphing)) {
 
   combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
 
-  ggsave(paste0("Poster//", str_replace(str_sub(col_name,1,-10)," ", "_"), ".png"), plot = combined, width = 12, height = 6.75, dpi = 200)
+  ggsave(
+    paste0(
+      "Poster//",
+      str_replace(str_sub(col_name, 1, -10), " ", "_"),
+      ".png"
+    ),
+    plot = combined,
+    width = 12,
+    height = 6.75,
+    dpi = 200
+  )
 }
 ```
 
 We create two sampling distributions of the Exponential distribution, which has a skewness of 2, to show how the distribution converges to a Normal distribution as sample size increases. We only look at n = 30 and n = 150 to compare the old guideline with the new one.
 
+```{r Graphing normal sampling distribution}
+x <- seq(-5, 5, length.out = 100)
+y <- dnorm(x)
+sub <- ggplot() +
+  geom_line(aes(x, y)) +
+  labs(
+    title = "Standard Normal Population"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 12),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+for (col_name in colnames(
+  graphing |>
+    select("Normal 10 Z-Scores")
+)) {
+  sample_size <- str_extract(col_name, "\\d+")
+
+  upper <- sum(graphing[[col_name]] >= 1.96) / length(graphing[[col_name]])
+  lower <- sum(graphing[[col_name]] <= -1.96) / length(graphing[[col_name]])
+
+  main <- ggplot(graphing, aes(x = .data[[col_name]])) +
+    geom_histogram(bins = 100, aes(y = after_stat(density))) +
+    stat_function(
+      fun = dnorm,
+      args = list(
+        mean = mean(graphing[[col_name]]),
+        sd = sd(graphing[[col_name]])
+      ),
+      color = "blue",
+      linewidth = 1.25
+    ) +
+    geom_vline(xintercept = 1.96, linetype = "dashed", color = "blue") +
+    annotate(
+      "text",
+      x = 2.5,
+      y = 0.1,
+      label = "1.96 SDs",
+      color = "blue",
+      size = 5
+    ) +
+    annotate(
+      "text",
+      x = -2.5,
+      y = 0.1,
+      label = "-1.96 SDs",
+      color = "blue",
+      size = 5
+    ) +
+    annotate(
+      "text",
+      x = 3,
+      y = 0.05,
+      label = round(upper, 4),
+      color = "black",
+      size = 5
+    ) +
+    annotate(
+      "text",
+      x = -3,
+      y = 0.05,
+      label = round(lower, 4),
+      color = "black",
+      size = 5
+    ) +
+    geom_vline(xintercept = -1.96, linetype = "dashed", color = "blue") +
+    labs(
+      title = paste(
+        "Sampling Distribution of Standardized Means for n =",
+        sample_size
+      ),
+      x = "Z Score",
+      y = "Frequency"
+    ) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 20),
+      axis.title = element_text(size = 17),
+      axis.text = element_text(size = 12)
+    )
+
+  combined <- main + patchwork::inset_element(sub, 0.6, 0.6, 1, 1)
+
+  ggsave(
+    paste0(
+      "Poster//",
+      str_replace(str_sub(col_name, 1, -10), " ", "_"),
+      ".png"
+    ),
+    plot = combined,
+    width = 12,
+    height = 6.75,
+    dpi = 200
+  )
+}
+```
+
 ```{r Graphing tails}
 read_csv("means.csv") |>
   mutate(
-    Distribution = paste(str_replace(Distribution, "\\{.*\\}", " "), round(Skewness, 2)),
-    Distribution = factor(Distribution, levels = unique(Distribution[order(-Skewness)]))
+    Distribution = paste(
+      str_replace(Distribution, "\\{.*\\}", " "),
+      round(Skewness, 2)
+    ),
+    Distribution = factor(
+      Distribution,
+      levels = unique(Distribution[order(-Skewness)])
+    )
   ) |>
   arrange(Skewness) |>
   ggplot(aes(x = `Sample Size`, color = Distribution)) +
@@ -329,7 +463,15 @@ read_csv("means.csv") |>
   geom_line(aes(y = `Upper Tail`), linewidth = 1) +
   geom_line(aes(y = `Lower Tail`), linewidth = 1) +
   geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) +
-  annotate("text", x = 40, y = 0.04, label = "n = 30", hjust = 0, size = 5, color = "black") +
+  annotate(
+    "text",
+    x = 40,
+    y = 0.04,
+    label = "n = 30",
+    hjust = 0,
+    size = 5,
+    color = "black"
+  ) +
   labs(
     title = "Upper and Lower Tail Weights of Sampling Distributions",
     x = "Sample Size",
