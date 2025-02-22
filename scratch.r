@@ -43,7 +43,9 @@ generate_data <- function(n, r, population_skews) {
   )
 }
 
-skew_f <- \(d1, d2) ((2 * d1 + d2 - 2) * sqrt(8 * (d2 - 4))) / ((d2 - 6) * sqrt(d1 * (d1 + d2 - 2)))
+skew_f <- \(d1, d2)
+  ((2 * d1 + d2 - 2) * sqrt(8 * (d2 - 4))) /
+    ((d2 - 6) * sqrt(d1 * (d1 + d2 - 2)))
 skew_lnorm <- \(sigma) (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
 population_skews <- c(
   0.5,
@@ -56,16 +58,23 @@ population_skews <- c(
   2.5,
   skew_lnorm(0.75)
 )
-ns <- c(seq(10, 50, 10), seq(50, 100, 25)) |> unique()
-r <- 1e6
+ns <- c(seq(10, 50, 10), seq(50, 200, 25)) |> unique()
+r <- 1e5
 
 skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
-skew_data |> write_csv(here::here("skew_data.csv"))
+# skew_data |> write_csv(here::here("skew_data.csv"))
 # skew_data <- read_csv(here::here("skew_data"))
 skew_data |>
-  ggplot(aes(x = pop_skewness, y = mean_sampling_skewness, color = fct(as.character(sample_size)))) +
+  ggplot(
+    aes(
+      x = pop_skewness,
+      y = mean_sampling_skewness,
+      color = fct(as.character(sample_size))
+    )
+  ) +
   geom_point() +
   geom_line() +
+  geom_abline(slope = 1) +
   geom_smooth(method = "lm", se = FALSE) +
   labs(
     title = "Population Skewness vs. Mean Sampling Skewness with Regression Lines",
@@ -77,7 +86,9 @@ skew_data |>
 
 skew_data |>
   mutate(percent = mean_sampling_skewness / pop_skewness) |>
-  ggplot(aes(x = sample_size, y = percent, color = fct(as.character(pop_skewness)))) +
+  ggplot(
+    aes(x = sample_size, y = percent, color = fct(as.character(pop_skewness)))
+  ) +
   geom_point() +
   geom_line() +
   geom_hline(yintercept = 1) +
@@ -94,3 +105,15 @@ skew_data |>
     size = 3,
     fontface = "bold"
   )
+
+# TODO: regress pop skewness on mss and n
+# TODO: look at each predictor separately
+model <- lm(pop_skewness ~ sample_size + mean_sampling_skewness, skew_data)
+summary(model)
+# fix normal distro
+# sampling distribution of means with n=10
+# look at percent error in tail probs like in paper
+
+# fix expo distro
+# sampling distro with again n=30
+# look at percent error in tail probs
