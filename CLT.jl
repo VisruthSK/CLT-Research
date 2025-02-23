@@ -109,6 +109,7 @@ function main(r)
     sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175]
     append!(sample_sizes, 200:50:1500)
     append!(sample_sizes, 1500:100:2000)
+    append!(sample_sizes, 2000:500:6000)
     unique!(sample_sizes)
 
     distributions = [
