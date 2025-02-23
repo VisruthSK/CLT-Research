@@ -154,3 +154,42 @@ tail_percents(graphing_df$`Exponential 150 Z-Scores`)
 tail_percents(graphing_df$`Normal 5 Z-Scores`)
 tail_percents(graphing_df$`Normal 10 Z-Scores`)
 tail_percents(graphing_df$`Normal 30 Z-Scores`)
+
+edgeworth <- function(z, e, lam, eta) {
+  U <- exp(-(z^2 / 2))
+  V <- -((lam * (z^2 - 1)) / (6 * sqrt(2 * pi)))
+  W <- (3 * eta * (z^4 - 6 * z + 3) - lam^2 * z * (z^4 - 10 * z^2 + 15)) /
+    (72 * sqrt(2 * pi))
+
+  suppressWarnings(
+    s <- c(
+      -sqrt(U) * sqrt(U * V^2 - 4 * W * e) + U * V,
+      -sqrt(U) * sqrt(U * V^2 - 4 * W * e) - U * V,
+      U * V - sqrt(U) * sqrt(U * V^2 + 4 * W * e),
+      U * V + sqrt(U) * sqrt(U * V^2 + 4 * W * e)
+    ) /
+      (2 * e)
+  )
+  s <- s[!is.na(s)]
+  max(s^2)
+}
+form <- \(error, lam) 1.303 * error^-2 * lam^2
+standardize <- \(data) (data - mean(data)) / sd(data)
+
+z <- qnorm(0.975)
+e <- 0.001
+lam <- 2 # expo distro
+eta <- 6 # expo distro
+
+err <- (e / (1 - pnorm(z))) |> print()
+n_edge <- edgeworth(z, e, lam, eta) |> print()
+n_form <- form(err, lam) |> print()
+
+samp_dist_formula <- replicate(1e5, mean(rexp(n_form, lam))) |> standardize()
+samp_dist_edge <- replicate(1e5, mean(rexp(n_edge))) |> standardize()
+
+hist(samp_dist_formula)
+hist(samp_dist_edge)
+
+mean(samp_dist_formula >= z)
+mean(samp_dist_edge >= z)
