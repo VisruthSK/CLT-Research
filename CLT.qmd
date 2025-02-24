@@ -213,7 +213,7 @@ summary(model)
 
 ```{r}
 n_per_bound <- function(percent) {
-  bounds <- 0.025 * percent / 100 * c(-1, 1) + 0.025
+  bounds <- 0.025 * percent * c(-1, 1) + 0.025
   temp <- read_csv("means.csv", show_col_types = FALSE) |>
     group_by(Distribution) |>
     mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
@@ -232,7 +232,7 @@ n_per_bound <- function(percent) {
 ```
 
 ```{r}
-x <- 30:9
+x <- 30:6 / 100
 y <- unname(sapply(x, n_per_bound))
 
 data.frame(x, y) |>
@@ -251,17 +251,17 @@ data.frame(x, y) |>
     axis.text = element_text(size = 12)
   )
 
-# ggsave("Poster//20_percent.png", width = 15, height = 8.5, dpi = 1000)
+ggsave("Poster//20_percent.png", width = 15, height = 8.5, dpi = 1000)
 
 linmanuealmodel <- lm(y ~ x)
 summary(linmanuealmodel)
 
-(unname(coef(linmanuealmodel)[2]) * 100)^-2
+(unname(coef(linmanuealmodel)[2]))^-2
 
 sample_size <- \(percent_bound)
-  (unname(coef(linmanuealmodel)[2]) * percent_bound)^-2
+(unname(coef(linmanuealmodel)[2]) * percent_bound)^-2
 
-sample_size(20)
+sample_size(0.20)
 
 # sample_size <- \(percent_bound)
 #   unname(predict(linmanuealmodel, data.frame(x = percent_bound)))
@@ -280,7 +280,7 @@ We ran a linear regression to determine that if $n\geq36*skewness^2$ the samplin
 This section is dedicated to creating data and graphs for the poster.
 
 ```{julia Generating Exponential data for graphing}
-gefunction graphing(r)
+function graphing(r)
     d = Exponential()
     n = 30
     μ = mean(d)
