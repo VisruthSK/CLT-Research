@@ -124,7 +124,6 @@ c("Exponential 30 Z-Scores", "Exponential 150 Z-Scores") |>
     title = "Exponential Population with Rate = 1"
   )
 
-
 x <- seq(-5, 5, length.out = 100)
 y <- dnorm(x)
 c("Normal 10 Z-Scores") |>
@@ -136,6 +135,7 @@ c("Normal 10 Z-Scores") |>
   )
 
 read_csv("means.csv") |>
+  filter(`Sample Size` <= 500) |>
   mutate(
     Distribution = paste(
       str_replace(Distribution, "\\{.*\\}", " "),
@@ -173,7 +173,7 @@ read_csv("means.csv") |>
   ) +
   theme_bw() +
   theme(
-    plot.title = element_text(size = 23),
+    plot.title = element_text(size = 20),
     axis.title = element_text(size = 17),
     axis.text = element_text(size = 12)
   )
