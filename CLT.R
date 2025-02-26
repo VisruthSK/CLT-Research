@@ -366,6 +366,11 @@ skew_data |>
   geom_line() +
   geom_hline(yintercept = 1) +
   theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  ) +
   ggrepel::geom_label_repel(
     data = skew_data |>
       mutate(percent = mean_sampling_skewness / pop_skewness) |>
