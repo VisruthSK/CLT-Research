@@ -1,5 +1,6 @@
 library(tidyverse)
 library(flextable)
+set.seed(0)
 
 # Figures
 df <- read_csv("means.csv") |>
@@ -264,5 +265,133 @@ ggsave(
   here::here("Figures", "20_percent.png"),
   width = 15,
   height = 8.5,
+  dpi = 1000
+)
+
+adjusted_skewness <- function(x) {
+  n <- length(x)
+  sqrt(n * (n - 1)) / (n - 2) * moments::skewness(x)
+}
+sampling_distribution <- \(distro, r)
+  replicate(r, adjusted_skewness(eval(distro)))
+
+generate_data <- function(n, r, population_skews) {
+  sampling_distributions <- list(
+    sampling_distribution(expr(rgamma(!!n, 16)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.25)), r),
+    sampling_distribution(expr(rgamma(!!n, 4)), r),
+    sampling_distribution(expr(rgamma(!!n, 2)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.5)), r),
+    sampling_distribution(expr(rgamma(!!n, 1)), r),
+    sampling_distribution(expr(rgamma(!!n, 0.64)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.75)), r)
+  )
+  distribution_names <- c(
+    "Gamma (α = 16, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.25)",
+    "Gamma (α = 4, θ = 1)",
+    "Gamma (α = 2, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.5)",
+    "Gamma (α = 1, θ = 1)",
+    "Gamma (α = 0.64, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.75)"
+  )
+
+  data.frame(
+    distribution = distribution_names,
+    pop_skewness = population_skews,
+    sample_size = n,
+    mean_sampling_skewness = map_dbl(sampling_distributions, mean),
+    median_sampling_skewness = map_dbl(sampling_distributions, median),
+    lower_quantile = map_dbl(
+      sampling_distributions,
+      \(x) quantile(abs(x), 0.025)
+    ),
+    upper_quantile = map_dbl(
+      sampling_distributions,
+      \(x) quantile(abs(x), 0.975)
+    )
+  )
+}
+
+skew_lnorm <- \(sigma) (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
+population_skews <- c(
+  0.5,
+  skew_lnorm(0.25),
+  1,
+  sqrt(2),
+  skew_lnorm(0.5),
+  2,
+  2.5,
+  skew_lnorm(0.75)
+)
+ns <- c(seq(10, 50, 10), seq(50, 200, 25)) |> unique()
+r <- 1e5
+
+skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |>
+  write_csv(here::here("skew_data.csv"))
+
+skew_data |>
+  ggplot(
+    aes(
+      x = pop_skewness,
+      y = mean_sampling_skewness,
+      color = fct(as.character(sample_size))
+    )
+  ) +
+  geom_point() +
+  geom_line() +
+  geom_abline(slope = 1) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Population Skewness vs Mean Sampling Skewness with Regression Lines",
+    x = "Population Skewness",
+    y = "Mean Sampling Skewness",
+    color = "Sample Size"
+  ) +
+  theme_bw()
+
+skew_data |>
+  mutate(
+    percent = mean_sampling_skewness / pop_skewness,
+    distribution = fct(
+      distribution,
+      levels = unique(distribution[order(pop_skewness)])
+    )
+  ) |>
+  ggplot(
+    aes(x = sample_size, y = percent, color = distribution)
+  ) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 1) +
+  theme_bw() +
+  ggrepel::geom_label_repel(
+    data = skew_data |>
+      mutate(percent = mean_sampling_skewness / pop_skewness) |>
+      group_by(pop_skewness) |>
+      slice_tail(n = 1),
+    aes(label = round(percent, 2), x = sample_size + 0.5),
+    show.legend = FALSE,
+    size = 3.5,
+    fontface = "bold",
+    segment.color = "grey",
+    min.segment.length = 0,
+    force = 2,
+    nudge_x = 10,
+    direction = "y",
+    max.overlaps = 17
+  ) +
+  labs(
+    title = "Convergence Rate of Sample Skewness to Population Skewness",
+    x = "Sample Size",
+    y = "Percent of Population Skewness",
+    color = "Distribution"
+  )
+
+ggsave(
+  here::here("Figures", "skewness_convergence.png"),
+  width = 12,
+  height = 6.75,
   dpi = 1000
 )
