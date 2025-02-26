@@ -18,7 +18,7 @@ ft <- flextable(df) |>
   font(fontname = "Trebuchet MS") |>
   autofit()
 
-save_as_image(ft, path = here::here("Poster", "table.png"), res = 2000)
+save_as_image(ft, path = here::here("Figures", "table.png"), res = 2000)
 
 graphing <- read_csv("graphing.csv")
 distro_plot <- function(col_name, x, y, title) {
@@ -101,7 +101,7 @@ distro_plot <- function(col_name, x, y, title) {
 
   ggsave(
     here::here(
-      "Poster",
+      "Figures",
       paste0(
         str_replace(str_sub(col_name, 1, -10), " ", "_"),
         ".png"
@@ -179,7 +179,7 @@ read_csv("means.csv") |>
   )
 
 ggsave(
-  here::here("Poster", "Tail_Weights.png"),
+  here::here("Figures", "Tail_Weights.png"),
   width = 12,
   height = 6.75,
   dpi = 1000
@@ -214,7 +214,7 @@ df |>
   )
 
 ggsave(
-  here::here("Poster", "Skew_Sample_Size.png"),
+  here::here("Figures", "Skew_Sample_Size.png"),
   width = 15,
   height = 8.5,
   dpi = 1000
@@ -261,7 +261,7 @@ data.frame(x, y) |>
   )
 
 ggsave(
-  here::here("Poster", "20_percent.png"),
+  here::here("Figures", "20_percent.png"),
   width = 15,
   height = 8.5,
   dpi = 1000
