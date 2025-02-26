@@ -357,6 +357,7 @@ sub <- ggplot() +
 
 for (col_name in colnames(
   graphing |>
+    # select("Normal 5 Z-Scores", "Normal 10 Z-Scores", "Normal 30 Z-Scores")
     select("Normal 10 Z-Scores")
 )) {
   sample_size <- str_extract(col_name, "\\d+")

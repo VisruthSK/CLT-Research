@@ -62,8 +62,7 @@ population_skews <- c(
 ns <- c(seq(10, 50, 10), seq(50, 200, 25)) |> unique()
 r <- 1e5
 
-# skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews))
-# skew_data |> write_csv(here::here("skew_data.csv"))
+# skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |> write_csv(here::here("skew_data.csv"))
 skew_data <- read_csv(here::here("skew_data.csv"))
 skew_data |>
   ggplot(
@@ -136,6 +135,7 @@ hist(graphing_df$`Exponential 30 Z-Scores`)
 hist(graphing_df$`Exponential 150 Z-Scores`)
 hist(graphing_df$`Normal 5 Z-Scores`)
 hist(graphing_df$`Normal 10 Z-Scores`)
+hist(graphing_df$`Normal 30 Z-Scores`)
 
 tail_percents <- function(sample_distro) {
   tail_values <- c(
@@ -155,6 +155,8 @@ tail_percents(graphing_df$`Normal 5 Z-Scores`)
 tail_percents(graphing_df$`Normal 10 Z-Scores`)
 tail_percents(graphing_df$`Normal 30 Z-Scores`)
 
+# Edgeworth Expansions of CDF
+
 edgeworth <- function(z, e, lam, eta) {
   U <- exp(-(z^2 / 2))
   V <- -((lam * (z^2 - 1)) / (6 * sqrt(2 * pi)))
@@ -173,7 +175,7 @@ edgeworth <- function(z, e, lam, eta) {
   s <- s[!is.na(s)]
   max(s^2)
 }
-form <- \(error, lam) 1.303 * error^-2 * lam^2
+formula <- \(error, lam) 1.303 * error^-2 * lam^2
 standardize <- \(data) (data - mean(data)) / sd(data)
 
 z <- qnorm(0.975)
@@ -183,7 +185,7 @@ eta <- 6 # expo distro
 
 err <- (e / (1 - pnorm(z))) |> print()
 n_edge <- edgeworth(z, e, lam, eta) |> print()
-n_form <- form(err, lam) |> print()
+n_formula <- formula(err, lam) |> print()
 
 samp_dist_formula <- replicate(1e5, mean(rexp(n_form, lam))) |> standardize()
 samp_dist_edge <- replicate(1e5, mean(rexp(n_edge))) |> standardize()
