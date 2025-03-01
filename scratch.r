@@ -195,3 +195,26 @@ hist(samp_dist_edge)
 
 mean(samp_dist_formula >= z)
 mean(samp_dist_edge >= z)
+
+# TODO: look at abs skewness and see if it converges to pop skewness
+# TODO: bootstrap sample skewness and look at CI; see how often wrong
+# TODO: Try KS
+
+theta <- adjusted_skewness(x)
+y <- replicate(1e5, adjusted_skewness(sample(x, 10, TRUE)))
+thetas <- quantile(y, c(0.025, 0.975))
+c(2 * theta - thetas[2], 2 * theta - thetas[1])
+
+library(boot)
+
+boot_skew <- \(data, indices) adjusted_skewness(data[indices])
+
+r <- 1e4
+n <- 10
+x <- rexp(n)
+upperbounds <- replicate(
+  r / 10,
+  boot.ci(boot(x, boot_skew, r), type = "bca")$bca[5]
+) |>
+  write_csv(here::here("upperbounds.csv"))
+# yabs <- abs(y)
