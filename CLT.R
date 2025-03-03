@@ -400,3 +400,66 @@ ggsave(
   height = 6.75,
   dpi = 1000
 )
+
+exp_data <- skew_data |>
+  filter(distribution == "Gamma (α = 1, θ = 1)") |>
+  mutate(
+    log_correction = log((pop_skewness / mean_sampling_skewness) - 1),
+    log_sample_size = log(sample_size)
+  )
+
+exp_data |>
+  ggplot(aes(x = log_sample_size, y = log_correction)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  theme_bw() +
+  labs(
+    x = "Log Sample Size",
+    y = "Log Correction Factor", # (log(pop_skewness/mean_sampling_skewness - 1)
+    title = "Linear Relationship Between Log Sample Size and Log Correction Factor for Exponential Distribution"
+  )
+
+ggsave(
+  here::here("Figures", "exponential_correction.png"),
+  width = 12,
+  height = 6.75,
+  dpi = 1000
+)
+
+model <- lm(log_correction ~ log_sample_size, data = exp_data)
+summary(model)
+
+coeffs <- coef(model)
+exp_corrected_skewness <- \(skew, n)
+  unname(skew * (exp(coeffs[1] + coeffs[2] * log(n)) + 1))
+
+skew_data |>
+  mutate(
+    corrected_skew = exp_corrected_skewness(
+      mean_sampling_skewness,
+      sample_size
+    ),
+    percent = corrected_skew / pop_skewness,
+    distribution = fct(
+      distribution,
+      levels = unique(distribution[order(pop_skewness)])
+    )
+  ) |>
+  ggplot(aes(x = sample_size, y = percent, color = distribution)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 1) +
+  theme_bw() +
+  labs(
+    x = "Sample Size",
+    y = "Percentage of Sample Size",
+    title = "Corrected Sample Skewnesses",
+    color = "Distribution"
+  )
+
+ggsave(
+  here::here("Figures", "corrected_sample_skewness.png"),
+  width = 12,
+  height = 6.75,
+  dpi = 1000
+)
