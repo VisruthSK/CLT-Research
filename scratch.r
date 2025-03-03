@@ -211,10 +211,44 @@ boot_skew <- \(data, indices) adjusted_skewness(data[indices])
 
 r <- 1e4
 n <- 10
-x <- rexp(n)
-upperbounds <- replicate(
-  r / 10,
-  boot.ci(boot(x, boot_skew, r), type = "bca")$bca[5]
-) |>
-  write_csv(here::here("upperbounds.csv"))
-# yabs <- abs(y)
+# x <- rexp(n)
+
+# withr::with_options(
+#   options(boot.ncpus = 10),
+#   upperbounds <- replicate(
+#     r / 10,
+#     boot.ci(
+#       boot(x, boot_skew, r, parallel = "multicore"),
+#       conf = 0.6,
+#       type = "bca"
+#     )$bca[5]
+#   ) |>
+#     as.data.frame()
+# )
+
+conf_levels <- seq(0.4, 0.95, 0.05)
+results_df <- data.frame(matrix(ncol = length(conf_levels), nrow = r / 10))
+colnames(results_df) <- paste0("conf_", conf_levels)
+
+for (i in seq_along(conf_levels)) {
+  conf_level <- conf_levels[i]
+
+  withr::with_options(
+    options(boot.ncpus = 10),
+    results_df[, i] <- replicate(
+      r / 10,
+      {
+        x <- rexp(n)
+        boot.ci(
+          boot(x, boot_skew, r, parallel = "multicore"),
+          conf = conf_level,
+          type = "bca"
+        )$bca[5]
+      }
+    )
+  )
+}
+
+results_df |> write_csv(here::here("upperbounds.csv"))
+
+results_df |> summarise(across(everything(), \(x) mean(x)))
