@@ -354,6 +354,10 @@ skew_data |>
 skew_data |>
   mutate(
     percent = mean_sampling_skewness / pop_skewness,
+    distribution = paste(
+      distribution,
+      round(pop_skewness, 2)
+    ),
     distribution = fct(
       distribution,
       levels = unique(distribution[order(pop_skewness)])
@@ -373,7 +377,17 @@ skew_data |>
   ) +
   ggrepel::geom_label_repel(
     data = skew_data |>
-      mutate(percent = mean_sampling_skewness / pop_skewness) |>
+      mutate(
+        percent = mean_sampling_skewness / pop_skewness,
+        distribution = paste(
+          distribution,
+          round(pop_skewness, 2)
+        ),
+        distribution = fct(
+          distribution,
+          levels = unique(distribution[order(pop_skewness)])
+        )
+      ) |>
       group_by(pop_skewness) |>
       slice_tail(n = 1),
     aes(label = round(percent, 2), x = sample_size + 0.5),
