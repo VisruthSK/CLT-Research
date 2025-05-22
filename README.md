@@ -12,4 +12,4 @@
 
 ![Paper Pre-Print](/CLT.pdf)
 
-![Poster](/Poster2024.png)
+![Poster](/Poster2025.png)
