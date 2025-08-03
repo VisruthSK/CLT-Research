@@ -152,7 +152,8 @@ read_csv("means.csv") |>
   geom_rect(
     aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
     fill = "grey",
-    linewidth = 0
+    linewidth = 0,
+    show.legend = FALSE
   ) +
   geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
   geom_line(aes(y = `Upper Tail`), linewidth = 1) +
@@ -272,8 +273,9 @@ adjusted_skewness <- function(x) {
   n <- length(x)
   sqrt(n * (n - 1)) / (n - 2) * moments::skewness(x)
 }
-sampling_distribution <- \(distro, r)
+sampling_distribution <- \(distro, r) {
   replicate(r, adjusted_skewness(eval(distro)))
+}
 
 generate_data <- function(n, r, population_skews) {
   sampling_distributions <- list(
@@ -444,8 +446,9 @@ model <- lm(log_correction ~ log_sample_size, data = exp_data)
 summary(model)
 
 coeffs <- coef(model)
-exp_corrected_skewness <- \(skew, n)
+exp_corrected_skewness <- \(skew, n) {
   unname(skew * (exp(coeffs[1] + coeffs[2] * log(n)) + 1))
+}
 
 skew_data |>
   mutate(
