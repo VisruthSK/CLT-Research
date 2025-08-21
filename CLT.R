@@ -21,7 +21,8 @@ ft <- flextable(df) |>
 
 save_as_image(ft, path = here::here("Figures", "table.png"), res = 2000)
 
-graphing <- read_csv("graphing.csv")
+graphing <- read_csv("graphing.csv") |>
+  bind_cols(read_csv("gamma_graphing.csv"))
 distro_plot <- function(col_name, x, y, title) {
   sample_size <- str_extract(col_name, "\\d+")
   upper <- sum(graphing[[col_name]] >= 1.96) / length(graphing[[col_name]])
@@ -135,6 +136,10 @@ c("Normal 10 Z-Scores") |>
     title = "Standard Normal Population"
   )
 
+x <- seq(0, 40, length.out = 100)
+y <- dgamma(x, shape = 16, rate = 1)
+distro_plot("Gamma 10 Z-Scores", x, y, "Gamma(16, 1) Population")
+
 read_csv("means.csv") |>
   filter(`Sample Size` <= 500) |>
   mutate(
@@ -143,8 +148,8 @@ read_csv("means.csv") |>
       round(Skewness, 2)
     ),
     Distribution = fct(
-      Distribution,
-      levels = unique(Distribution[order(-Skewness)])
+      as.character(Distribution),
+      levels = as.character(unique(Distribution[order(-Skewness)]))
     )
   ) |>
   arrange(Skewness) |>
@@ -271,7 +276,8 @@ ggsave(
 
 adjusted_skewness <- function(x) {
   n <- length(x)
-  sqrt(n * (n - 1)) / (n - 2) * moments::skewness(x)
+  d <- x - mean(x)
+  sqrt(n * (n - 1)) / (n - 2) * sum(d^3) / sum(d^2)^1.5 * length(x)^0.5
 }
 sampling_distribution <- \(distro, r) {
   replicate(r, adjusted_skewness(eval(distro)))
@@ -332,6 +338,7 @@ r <- 1e5
 
 skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |>
   write_csv(here::here("skew_data.csv"))
+skew_data <- read_csv(here::here("skew_data.csv"))
 
 skew_data |>
   ggplot(
@@ -410,6 +417,57 @@ skew_data |>
     color = "Distribution"
   )
 
+skew_data |>
+  mutate(
+    percent = mean_sampling_skewness / pop_skewness,
+    distribution = round(pop_skewness, 2), # Only keep the skewness digits
+    distribution = fct(
+      as.character(distribution),
+      levels = as.character(unique(distribution[order(pop_skewness)]))
+    )
+  ) |>
+  ggplot(
+    aes(x = sample_size, y = percent, color = distribution)
+  ) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 1) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  ) +
+  ggrepel::geom_label_repel(
+    data = skew_data |>
+      mutate(
+        percent = mean_sampling_skewness / pop_skewness,
+        distribution = round(pop_skewness, 2), # Only keep the skewness digits
+        distribution = fct(
+          as.character(distribution),
+          levels = as.character(unique(distribution[order(pop_skewness)]))
+        )
+      ) |>
+      group_by(pop_skewness) |>
+      slice_tail(n = 1),
+    aes(label = round(percent, 2), x = sample_size + 0.5),
+    show.legend = FALSE,
+    size = 3.5,
+    fontface = "bold",
+    segment.color = "grey",
+    min.segment.length = 0,
+    force = 2,
+    nudge_x = 10,
+    direction = "y",
+    max.overlaps = 17
+  ) +
+  labs(
+    title = "Convergence Rate of Sample Skewness to Population Skewness",
+    x = "Sample Size",
+    y = "Percent of Population Skewness",
+    color = "Skewness"
+  )
+
 ggsave(
   here::here("Figures", "skewness_convergence.png"),
   width = 12,
@@ -469,9 +527,68 @@ skew_data |>
   theme_bw() +
   labs(
     x = "Sample Size",
-    y = "Percentage of Sample Size",
+    y = "Percentage of Population Skewness",
     title = "Corrected Sample Skewnesses",
     color = "Distribution"
+  )
+
+skew_data |>
+  mutate(
+    percent = exp_corrected_skewness(
+      mean_sampling_skewness,
+      sample_size
+    ) /
+      pop_skewness,
+    distribution = round(pop_skewness, 2),
+    distribution = fct(
+      as.character(distribution),
+      levels = as.character(unique(distribution[order(pop_skewness)]))
+    )
+  ) |>
+  ggplot(
+    aes(x = sample_size, y = percent, color = distribution)
+  ) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 1) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  ) +
+  ggrepel::geom_label_repel(
+    data = skew_data |>
+      mutate(
+        percent = exp_corrected_skewness(
+          mean_sampling_skewness,
+          sample_size
+        ) /
+          pop_skewness,
+        distribution = round(pop_skewness, 2),
+        distribution = fct(
+          as.character(distribution),
+          levels = as.character(unique(distribution[order(pop_skewness)]))
+        )
+      ) |>
+      group_by(pop_skewness) |>
+      slice_tail(n = 1),
+    aes(label = round(percent, 2), x = sample_size + 0.5),
+    show.legend = FALSE,
+    size = 3.5,
+    fontface = "bold",
+    segment.color = "grey",
+    min.segment.length = 0,
+    force = 2,
+    nudge_x = 10,
+    direction = "y",
+    max.overlaps = 17
+  ) +
+  labs(
+    x = "Sample Size",
+    y = "Percentage of Population Skewness",
+    title = "Corrected Sample Skewnesses",
+    color = "Skewness"
   )
 
 ggsave(

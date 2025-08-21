@@ -153,5 +153,26 @@ function graphing(r)
     nothing
 end
 
+function gamma_graphing(r)
+    d = Gamma(16, 1)
+    μ = mean(d)
+    σ = std(d)
+
+    n = 10
+    gamma10 = sampling_distribution(mean, d, n, r)
+    gamma10std = zeros(r)
+    zscore!(gamma10std, gamma10, μ, σ / sqrt(n))
+
+    graphing = DataFrame(
+        "Gamma 10" => gamma10,
+        "Gamma 10 Z-Scores" => gamma10std,
+    )
+
+    CSV.write("gamma_graphing.csv", graphing, compress=true)
+
+    nothing
+end
+
 main(1_000_000)
 graphing(1_000_000)
+gamma_graphing(1_000_000)
