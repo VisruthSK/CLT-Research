@@ -20,6 +20,9 @@ ft <- flextable(df) |>
   autofit()
 
 save_as_image(ft, path = here::here("Figures", "table.png"), res = 2000)
+expected_n_distros <- read_csv("means.csv", show_col_types = FALSE) |>
+  summarize(n = n_distinct(Distribution)) |>
+  pull(n)
 
 graphing <- read_csv("graphing.csv") |>
   bind_cols(read_csv("gamma_graphing.csv"))
@@ -240,7 +243,7 @@ n_per_bound <- function(percent) {
     select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
     arrange(Skewness, Distribution)
 
-  stopifnot(nrow(temp) == 9)
+  stopifnot(nrow(temp) == expected_n_distros)
 
   coef(lm(Skewness ~ sqrt(`Sample Size`), temp))["sqrt(`Sample Size`)"]
 }
@@ -595,5 +598,156 @@ ggsave(
   here::here("Figures", "corrected_sample_skewness.png"),
   width = 12,
   height = 6.75,
+  dpi = 1000
+)
+
+# two sample
+
+diff_means <- read_csv("difference_means.csv", show_col_types = FALSE) |>
+  mutate(
+    Ratio = case_when(
+      `Sample Size 2` == `Sample Size 1` ~ "1:1",
+      `Sample Size 2` == ceiling(`Sample Size 1` / 2) ~ "1:2",
+      TRUE ~ "1:3"
+    ),
+    Distribution = str_replace(Distribution, "\\{.*\\}", " ")
+  )
+
+c("1:1", "1:2", "1:3") |>
+  walk(\(ratio_val) {
+    diff_means |>
+      filter(Ratio == ratio_val) |>
+      group_by(Distribution, Ratio) |>
+      filter(
+        `Lower Tail` >= 0.02 & `Lower Tail` <= 0.03,
+        `Upper Tail` >= 0.02 & `Upper Tail` <= 0.03
+      ) |>
+      filter(`Sample Size 1` == min(`Sample Size 1`)) |>
+      ungroup() |>
+      select(
+        Distribution,
+        Ratio,
+        Skewness,
+        `Sampling Skewness`,
+        `Sample Size 1`,
+        `Sample Size 2`
+      ) |>
+      mutate(`Combined n` = `Sample Size 1` + `Sample Size 2`) |>
+      arrange(Ratio, Skewness, Distribution) |>
+      flextable() |>
+      colformat_double(j = c("Skewness", "Sampling Skewness"), digits = 3) |>
+      font(fontname = "Trebuchet MS") |>
+      autofit() |>
+      save_as_image(
+        path = here::here(
+          "Figures",
+          paste0(
+            "table_diff_means_",
+            str_replace_all(ratio_val, ":", "_"),
+            ".png"
+          )
+        ),
+        res = 1000
+      )
+  })
+
+c("1:1", "1:2", "1:3") |>
+  walk(\(ratio_val) {
+    p <- diff_means |>
+      filter(`Sample Size 1` <= 500, Ratio == ratio_val) |>
+      mutate(
+        Distribution = paste(Distribution, round(Skewness, 2)),
+        Distribution = fct(
+          as.character(Distribution),
+          levels = as.character(unique(Distribution[order(-Skewness)]))
+        )
+      ) |>
+      arrange(Skewness) |>
+      ggplot(aes(x = `Sample Size 1`, color = Distribution)) +
+      geom_rect(
+        aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
+        fill = "grey",
+        linewidth = 0,
+        show.legend = FALSE
+      ) +
+      geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
+      geom_line(aes(y = `Upper Tail`), linewidth = 1) +
+      geom_line(aes(y = `Lower Tail`), linewidth = 1) +
+      labs(
+        title = paste(
+          "Upper and Lower Tail Weights for Difference in Means (",
+          ratio_val,
+          ")",
+          sep = ""
+        ),
+        x = "Sample Size 1",
+        y = "Tail Weight"
+      ) +
+      theme_bw() +
+      theme(
+        plot.title = element_text(size = 20),
+        axis.title = element_text(size = 17),
+        axis.text = element_text(size = 12)
+      )
+
+    ggsave(
+      here::here(
+        "Figures",
+        paste0(
+          "Tail_Weights_Diff_Means_",
+          str_replace_all(ratio_val, ":", "_"),
+          ".png"
+        )
+      ),
+      plot = p,
+      width = 12,
+      height = 6.75,
+      dpi = 1000
+    )
+  })
+
+diff_df <- diff_means |>
+  group_by(Distribution, Ratio) |>
+  filter(
+    `Lower Tail` >= 0.02 & `Lower Tail` <= 0.03,
+    `Upper Tail` >= 0.02 & `Upper Tail` <= 0.03
+  ) |>
+  filter(`Sample Size 1` == min(`Sample Size 1`)) |>
+  ungroup() |>
+  arrange(Ratio, Skewness, Distribution)
+
+diff_df |>
+  ggplot(aes(
+    x = sqrt(`Sample Size 1`),
+    y = Skewness,
+    color = Ratio,
+    label = Distribution
+  )) +
+  geom_point(size = 2.5) +
+  geom_smooth(
+    data = diff_df,
+    aes(x = sqrt(`Sample Size 1`), y = Skewness, color = Ratio),
+    method = "lm",
+    se = FALSE,
+    linetype = "dashed",
+    inherit.aes = FALSE
+  ) +
+  ggrepel::geom_label_repel(seed = 0, size = 3.5, show.legend = FALSE) +
+  labs(
+    title = "Skewness vs Minimum sqrt(Sample Size 1) by Ratio",
+    x = "Square Root of Sample Size 1",
+    y = "Skewness"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
+
+ggsave(
+  here::here("Figures", "Skew_Sample_Size_Diff_Means.png"),
+  width = 15,
+  height = 8.5,
   dpi = 1000
 )
