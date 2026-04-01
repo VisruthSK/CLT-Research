@@ -246,7 +246,7 @@ function main(r; mode::Symbol=:means)
 
     if mode in (:t, :all)
         t_summary::DataFrame = analyze_t_statistics(r, sample_sizes, tstar, distributions)
-        CSV.write("t_statistics.csv", t_summary, compress=true)
+        CSV.write("t_statistics.csv.gz", t_summary, compress=true)
     end
 
     nothing
