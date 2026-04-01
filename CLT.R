@@ -195,6 +195,50 @@ ggsave(
   dpi = 1000
 )
 
+read_csv("means.csv") |>
+  filter(`Sample Size` <= 500) |>
+  mutate(
+    Distribution = paste(
+      str_replace(Distribution, "\\{.*\\}", " "),
+      round(Skewness, 2)
+    ),
+    Distribution = fct(
+      as.character(Distribution),
+      levels = as.character(unique(Distribution[order(-Skewness)]))
+    )
+  ) |>
+  arrange(Skewness) |>
+  ggplot(aes(x = `Sample Size`, color = Distribution)) +
+  geom_rect(
+    aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
+    fill = "grey",
+    linewidth = 0,
+    show.legend = FALSE
+  ) +
+  geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
+  geom_line(aes(y = `Total`), linewidth = 1) +
+  geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) +
+  annotate(
+    "text",
+    x = 40,
+    y = 0.04,
+    label = "n = 30",
+    hjust = 0,
+    size = 5,
+    color = "black"
+  ) +
+  labs(
+    title = "Total Tail Weights of Sampling Distributions",
+    x = "Sample Size",
+    y = "Tail Weight"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
+
 # Analysis
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
 summary(model)
