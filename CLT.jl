@@ -1,5 +1,9 @@
 using Distributions, Random, DataFrames, CSV, StatsBase, Statistics
 
+function t_statistic(data::Vector{Float64}; μ::Real)::Float64
+    (mean(data) - μ) / (std(data) / sqrt(length(data)))
+end
+
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Vector{Float64}
     rng = MersenneTwister(0)
     # Preallocating vectors for speed
@@ -31,6 +35,20 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     # Calculating tail probabilities
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
+
+    (md, IQR, upper, lower, skewness, kurtosis)
+end
+
+function analysis_studentized(statistic::Function, d::Distribution, n::Int, r::Int, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64}
+    statistics = sampling_distribution(statistic, d, n, r; args...)
+    skewness = StatsBase.skewness(statistics)
+    kurtosis = StatsBase.kurtosis(statistics)
+
+    md = median(statistics)
+    IQR = quantile(statistics, 0.75) - quantile(statistics, 0.25)
+
+    upper = sum(statistics .>= critical) / r
+    lower = sum(statistics .<= -critical) / r
 
     (md, IQR, upper, lower, skewness, kurtosis)
 end
@@ -114,6 +132,43 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
     sort!(results, [:Distribution, :"Sample Size"])
 end
 
+function analyze_t_statistics(r::Int, sample_sizes::Vector{Int}, critical::Function, distributions)::DataFrame
+    println("Analyzing sampling distributions of t statistics with $(r) repetitions")
+    results = DataFrame(
+        "Distribution" => String[],
+        "Skewness" => Float64[],
+        "Sample Size" => Int64[],
+        "Median" => Float64[],
+        "IQR" => Float64[],
+        "Upper Tail" => Float64[],
+        "Lower Tail" => Float64[],
+        "Sampling Skewness" => Float64[],
+        "Sampling Kurtosis" => Float64[],
+        "Population Mean" => Float64[],
+        "Population SD" => Float64[]
+    )
+
+    @inbounds for d::Distribution in distributions
+        println(string(d))
+
+        μ = mean(d)
+        σ = std(d)
+        skewness = StatsBase.skewness(d)
+
+        u = Threads.SpinLock()
+        @inbounds Threads.@threads for n in sample_sizes
+            median, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis_studentized(
+                t_statistic, d, n, r, abs(critical(n)), μ=μ
+            )
+            Threads.lock(u) do
+                push!(results, (string(d), skewness, n, median, IQR, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
+            end
+        end
+    end
+
+    sort!(results, [:Distribution, :"Sample Size"])
+end
+
 function analyze_difference_in_means(statistic::Function, r::Int, sample_sizes::Vector{Int}, ratios::Vector{Tuple{Int,Int}}, critical::Function, distributions)::DataFrame
     println("Analyzing sampling distributions of difference in $(statistic)s with $(r) repetitions")
     summary = DataFrame(
@@ -172,17 +227,26 @@ function main(r; mode::Symbol=:means)
     ]
     ratios = [(1, 1), (1, 2), (1, 3)]
     zstar = quantile(Normal(), 0.975)
+    tstar = n -> quantile(TDist(n - 1), 0.975)
     critical_mean = n -> zstar
     critical_diff = (n1, n2) -> zstar
+    valid_modes = (:means, :difference_in_means, :both, :t, :all)
 
-    if mode == :means || mode == :both
+    mode in valid_modes || throw(ArgumentError("Unsupported mode $(mode). Valid modes are $(valid_modes)."))
+
+    if mode in (:means, :both, :all)
         means::DataFrame = analyze_distributions(mean, r, sample_sizes, critical_mean, distributions)
         CSV.write("means.csv", means, compress=true)
     end
 
-    if mode == :difference_in_means || mode == :both
+    if mode in (:difference_in_means, :both, :all)
         difference_summary = analyze_difference_in_means(mean, r, sample_sizes, ratios, critical_diff, distributions)
         CSV.write("difference_means.csv", difference_summary, compress=true)
+    end
+
+    if mode in (:t, :all)
+        t_summary::DataFrame = analyze_t_statistics(r, sample_sizes, tstar, distributions)
+        CSV.write("t_statistics.csv", t_summary, compress=true)
     end
 
     nothing
@@ -262,7 +326,8 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     # main(1_000_000; mode=:means)
+    main(1_000_000; mode=:t)
+    # main(1_000_000; mode=:difference_in_means)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
-    main(1_000_000; mode=:difference_in_means)
 end
