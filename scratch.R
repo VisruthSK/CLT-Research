@@ -8,13 +8,21 @@ expected_n_distros <- t_stats |>
   summarize(n = n_distinct(Distribution)) |>
   pull(n)
 
-minimum_n_table <- function(bounds = c(0.04, 0.06)) {
+minimum_n_table <- function(bounds = c(0.04, 0.06), on = c("total", "tails")) {
+  on <- match.arg(on)
   t_stats |>
+    filter(
+      if (on == "total") {
+        between(Total, bounds[1], bounds[2])
+      } else {
+        between(`Lower Tail`, bounds[1], bounds[2]) &
+          between(`Upper Tail`, bounds[1], bounds[2])
+      }
+    ) |>
     group_by(Distribution) |>
-    mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
-    filter(between(Total, bounds[1], bounds[2])) |>
-    filter(`Sample Size` == min(`Sample Size`)) |>
+    slice_min(`Sample Size`, n = 1, with_ties = TRUE) |>
     ungroup() |>
+    mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
     select(Distribution, Skewness, `Sampling Skewness`, `Sample Size`) |>
     arrange(Skewness, Distribution)
 }
@@ -34,7 +42,12 @@ ordered_distribution_labels <- function(df) {
     arrange(Skewness)
 }
 
-table_df <- minimum_n_table()
+on <- "tails"
+bounds <- if (on == "total") c(0.04, 0.06) else c(0.02, 0.03)
+table_res <- 600
+plot_dpi <- 450
+
+table_df <- minimum_n_table(bounds = bounds, on = on)
 stopifnot(nrow(table_df) == expected_n_distros)
 
 ft <- flextable(table_df) |>
@@ -47,12 +60,11 @@ ft <- flextable(table_df) |>
 
 save_as_image(
   ft,
-  path = here::here("Figures", "table_t_statistics.png"),
-  res = 2000
+  path = here::here("Figures", paste0("table_t_statistics_", on, ".png")),
+  res = table_res
 )
 
 tail_plot <- t_stats |>
-  filter(`Sample Size` <= 500) |>
   ordered_distribution_labels() |>
   ggplot(aes(x = `Sample Size`, color = Distribution)) +
   geom_rect(
@@ -86,16 +98,7 @@ tail_plot <- t_stats |>
     axis.text = element_text(size = 12)
   )
 
-ggsave(
-  here::here("Figures", "Tail_Weights_t_statistics.png"),
-  plot = tail_plot,
-  width = 12,
-  height = 6.75,
-  dpi = 1000
-)
-
 total_tail_plot <- t_stats |>
-  filter(`Sample Size` <= 500) |>
   ordered_distribution_labels() |>
   ggplot(aes(x = `Sample Size`, color = Distribution)) +
   geom_rect(
@@ -129,11 +132,66 @@ total_tail_plot <- t_stats |>
   )
 
 ggsave(
+  here::here("Figures", "Tail_Weights_t_statistics.png"),
+  plot = tail_plot,
+  width = 12,
+  height = 6.75,
+  dpi = plot_dpi
+)
+
+ggsave(
   here::here("Figures", "Total_Tail_Weights_t_statistics.png"),
   plot = total_tail_plot,
   width = 12,
   height = 6.75,
-  dpi = 1000
+  dpi = plot_dpi
+)
+
+avg_sample_skewness_df <- t_stats |>
+  filter(`Sample Size` <= 500) |>
+  mutate(
+    `Average Sample Skewness (%)` = 100 * `Average Sample Skewness` / Skewness
+  ) |>
+  ordered_distribution_labels()
+
+avg_sample_skewness_plot <- avg_sample_skewness_df |>
+  ggplot(aes(
+    x = `Sample Size`,
+    y = `Average Sample Skewness (%)`,
+    color = Distribution
+  )) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) +
+  annotate(
+    "text",
+    x = 40,
+    y = max(avg_sample_skewness_df$`Average Sample Skewness (%)`) * 0.95,
+    label = "n = 30",
+    hjust = 0,
+    size = 5,
+    color = "black"
+  ) +
+  labs(
+    title = "Average Sample Skewness as Percentage of Total Skewness",
+    x = "Sample Size",
+    y = "Average Sample Skewness (%)"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 20),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
+
+ggsave(
+  here::here(
+    "Figures",
+    paste0("Avg_Sample_Skewness_t_statistics_", on, ".png")
+  ),
+  plot = avg_sample_skewness_plot,
+  width = 12,
+  height = 6.75,
+  dpi = plot_dpi
 )
 
 model <- lm(Skewness ~ sqrt(`Sample Size`), table_df)
@@ -164,9 +222,9 @@ skew_plot <- table_df |>
   ggrepel::geom_label_repel(seed = 0, nudge_x = 1, size = 5)
 
 ggsave(
-  here::here("Figures", "Skew_Sample_Size_t_statistics.png"),
+  here::here("Figures", paste0("Skew_Sample_Size_t_statistics_", on, ".png")),
   plot = skew_plot,
   width = 15,
   height = 8.5,
-  dpi = 1000
+  dpi = plot_dpi
 )
