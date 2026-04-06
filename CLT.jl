@@ -4,23 +4,25 @@ function t_statistic(data::Vector{Float64}; μ::Real)::Float64
     (mean(data) - μ) / (std(data) / sqrt(length(data)))
 end
 
-function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Vector{Float64}
+function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Tuple{Vector{Float64},Float64}
     rng = MersenneTwister(0)
     # Preallocating vectors for speed
     sample_statistics = zeros(r)
     sample = zeros(n)
+    sample_skewness_total = 0.0
 
     # Sampling r times and calculating the statistic
     @inbounds for i in 1:r
         rand!(rng, d, sample) # in-place to reduce memory allocation
         sample_statistics[i] = statistic(sample; args...)::Float64
+        sample_skewness_total += StatsBase.skewness(sample)
     end
 
-    sample_statistics
+    (sample_statistics, sample_skewness_total / r)
 end
 
-function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64}
-    statistics = sampling_distribution(statistic, d, n, r; args...)
+function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64,Float64}
+    statistics, average_sample_skewness = sampling_distribution(statistic, d, n, r; args...)
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
@@ -36,11 +38,11 @@ function analysis(statistic::Function, d::Distribution, n::Int, r::Int, μ::Real
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
-    (md, IQR, upper, lower, skewness, kurtosis)
+    (md, IQR, upper, lower, skewness, average_sample_skewness, kurtosis)
 end
 
-function analysis_studentized(statistic::Function, d::Distribution, n::Int, r::Int, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64}
-    statistics = sampling_distribution(statistic, d, n, r; args...)
+function analysis_studentized(statistic::Function, d::Distribution, n::Int, r::Int, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64,Float64}
+    statistics, average_sample_skewness = sampling_distribution(statistic, d, n, r; args...)
     skewness = StatsBase.skewness(statistics)
     kurtosis = StatsBase.kurtosis(statistics)
 
@@ -50,14 +52,15 @@ function analysis_studentized(statistic::Function, d::Distribution, n::Int, r::I
     upper = sum(statistics .>= critical) / r
     lower = sum(statistics .<= -critical) / r
 
-    (md, IQR, upper, lower, skewness, kurtosis)
+    (md, IQR, upper, lower, skewness, average_sample_skewness, kurtosis)
 end
 
-function sampling_distribution_two_groups(statistic::Function, d::Distribution, n1::Int, n2::Int, r::Int; args...)::Vector{Float64}
+function sampling_distribution_two_groups(statistic::Function, d::Distribution, n1::Int, n2::Int, r::Int; args...)::Tuple{Vector{Float64},Float64}
     rng = MersenneTwister(0)
     difference_statistics = zeros(r)
     sample_1 = zeros(n1)
     sample_2 = zeros(n2)
+    sample_skewness_total = 0.0
 
     @inbounds for i in 1:r
         rand!(rng, d, sample_1)
@@ -65,13 +68,14 @@ function sampling_distribution_two_groups(statistic::Function, d::Distribution, 
         g1 = statistic(sample_1; args...)::Float64
         g2 = statistic(sample_2; args...)::Float64
         difference_statistics[i] = g1 - g2
+        sample_skewness_total += (StatsBase.skewness(sample_1) + StatsBase.skewness(sample_2)) / 2
     end
 
-    difference_statistics
+    (difference_statistics, sample_skewness_total / r)
 end
 
-function analysis_difference_in_means(statistic::Function, d::Distribution, n1::Int, n2::Int, r::Int, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64}
-    difference_statistics = sampling_distribution_two_groups(statistic, d, n1, n2, r; args...)
+function analysis_difference_in_means(statistic::Function, d::Distribution, n1::Int, n2::Int, r::Int, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64,Float64}
+    difference_statistics, average_sample_skewness = sampling_distribution_two_groups(statistic, d, n1, n2, r; args...)
     skewness = StatsBase.skewness(difference_statistics)
     kurtosis = StatsBase.kurtosis(difference_statistics)
 
@@ -85,7 +89,7 @@ function analysis_difference_in_means(statistic::Function, d::Distribution, n1::
     upper = sum(z_scores .>= critical) / r
     lower = sum(z_scores .<= -critical) / r
 
-    (md, IQR, upper, lower, skewness, kurtosis)
+    (md, IQR, upper, lower, skewness, average_sample_skewness, kurtosis)
 end
 
 function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector{Int}, critical::Function, distributions, params=false)::DataFrame
@@ -100,6 +104,7 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         "Upper Tail" => Float64[],
         "Lower Tail" => Float64[],
         "Sampling Skewness" => Float64[],
+        "Average Sample Skewness" => Float64[],
         "Sampling Kurtosis" => Float64[],
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
@@ -118,12 +123,12 @@ function analyze_distributions(statistic::Function, r::Int, sample_sizes::Vector
         u = Threads.SpinLock() # lock to avoid data races
         @inbounds Threads.@threads for n in sample_sizes
             if params
-                median, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
+                median, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)), μ=μ)
             else
-                median, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
+                median, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis = analysis(statistic, d, n, r, μ, σ, abs(critical(n)))
             end
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, median, IQR, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
+                push!(results, (string(d), skewness, n, median, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis, μ, σ))
             end
         end
 
@@ -143,6 +148,7 @@ function analyze_t_statistics(r::Int, sample_sizes::Vector{Int}, critical::Funct
         "Upper Tail" => Float64[],
         "Lower Tail" => Float64[],
         "Sampling Skewness" => Float64[],
+        "Average Sample Skewness" => Float64[],
         "Sampling Kurtosis" => Float64[],
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
@@ -157,11 +163,11 @@ function analyze_t_statistics(r::Int, sample_sizes::Vector{Int}, critical::Funct
 
         u = Threads.SpinLock()
         @inbounds Threads.@threads for n in sample_sizes
-            median, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis_studentized(
+            median, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis = analysis_studentized(
                 t_statistic, d, n, r, abs(critical(n)), μ=μ
             )
             Threads.lock(u) do
-                push!(results, (string(d), skewness, n, median, IQR, upper, lower, sample_skewness, sample_kurtosis, μ, σ))
+                push!(results, (string(d), skewness, n, median, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis, μ, σ))
             end
         end
     end
@@ -181,6 +187,7 @@ function analyze_difference_in_means(statistic::Function, r::Int, sample_sizes::
         "Upper Tail" => Float64[],
         "Lower Tail" => Float64[],
         "Sampling Skewness" => Float64[],
+        "Average Sample Skewness" => Float64[],
         "Sampling Kurtosis" => Float64[],
         "Population Mean" => Float64[],
         "Population SD" => Float64[]
@@ -197,12 +204,12 @@ function analyze_difference_in_means(statistic::Function, r::Int, sample_sizes::
                 n1 = n
                 n2 = cld(ratio[1] * n, ratio[2])
 
-                md, IQR, upper, lower, sample_skewness, sample_kurtosis = analysis_difference_in_means(
+                md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis = analysis_difference_in_means(
                     statistic, d, n1, n2, r, σ, abs(critical(n1, n2))
                 )
                 push!(
                     summary,
-                    (string(d), skewness, n1, n2, md, IQR, upper, lower, sample_skewness, sample_kurtosis, μ, σ)
+                    (string(d), skewness, n1, n2, md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis, μ, σ)
                 )
             end
         end
@@ -212,8 +219,7 @@ function analyze_difference_in_means(statistic::Function, r::Int, sample_sizes::
     summary
 end
 
-function main(r; mode::Symbol=:means)
-    sample_sizes = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500]
+function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500])
     distributions = [
         Gamma(16),
         LogNormal(0, 0.25),
@@ -258,12 +264,12 @@ function graphing(r)
     σ = std(d)
 
     n = 30
-    exponential30 = sampling_distribution(mean, d, n, r)
+    exponential30, _ = sampling_distribution(mean, d, n, r)
     exponential30std = zeros(r)
     zscore!(exponential30std, exponential30, μ, σ / sqrt(n))
 
     n = 150
-    exponential150 = sampling_distribution(mean, d, n, r)
+    exponential150, _ = sampling_distribution(mean, d, n, r)
     exponential150std = zeros(r)
     zscore!(exponential150std, exponential150, μ, σ / sqrt(n))
 
@@ -272,17 +278,17 @@ function graphing(r)
     σ = std(d)
 
     n = 5
-    normal5 = sampling_distribution(mean, d, n, r)
+    normal5, _ = sampling_distribution(mean, d, n, r)
     normal5std = zeros(r)
     zscore!(normal5std, normal5, μ, σ / sqrt(n))
 
     n = 10
-    normal10 = sampling_distribution(mean, d, n, r)
+    normal10, _ = sampling_distribution(mean, d, n, r)
     normal10std = zeros(r)
     zscore!(normal10std, normal10, μ, σ / sqrt(n))
 
     n = 30
-    normal30 = sampling_distribution(mean, d, n, r)
+    normal30, _ = sampling_distribution(mean, d, n, r)
     normal30std = zeros(r)
     zscore!(normal30std, normal30, μ, σ / sqrt(n))
 
@@ -310,7 +316,7 @@ function gamma_graphing(r)
     σ = std(d)
 
     n = 10
-    gamma10 = sampling_distribution(mean, d, n, r)
+    gamma10, _ = sampling_distribution(mean, d, n, r)
     gamma10std = zeros(r)
     zscore!(gamma10std, gamma10, μ, σ / sqrt(n))
 
@@ -326,7 +332,7 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     # main(1_000_000; mode=:means)
-    main(1_000_000; mode=:t)
+    main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
