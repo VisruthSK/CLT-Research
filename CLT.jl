@@ -221,14 +221,24 @@ end
 
 function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500])
     distributions = [
-        Gamma(16),
-        LogNormal(0, 0.25),
         Gamma(4),
+        LogNormal(0, 0.35),
+        Gamma(2.56),
+        LogNormal(0, 0.4),
         Gamma(2),
+        Gamma(1.78),
+        LogNormal(0, 0.45),
+        Gamma(1.31),
         LogNormal(0, 0.5),
-        # Gamma(1),
-        Exponential(),
+        Gamma(1),
+        LogNormal(0, 0.55),
+        Gamma(0.79),
+        LogNormal(0, 0.6),
         Gamma(0.64),
+        LogNormal(0, 0.65),
+        Gamma(0.53),
+        LogNormal(0, 0.7),
+        Gamma(0.44),
         LogNormal(0, 0.75)
     ]
     ratios = [(1, 1), (1, 2), (1, 3)]
@@ -242,12 +252,12 @@ function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 
 
     if mode in (:means, :both, :all)
         means::DataFrame = analyze_distributions(mean, r, sample_sizes, critical_mean, distributions)
-        CSV.write("means.csv", means, compress=true)
+        CSV.write("means.csv.gz", means, compress=true)
     end
 
     if mode in (:difference_in_means, :both, :all)
         difference_summary = analyze_difference_in_means(mean, r, sample_sizes, ratios, critical_diff, distributions)
-        CSV.write("difference_means.csv", difference_summary, compress=true)
+        CSV.write("difference_means.csv.gz", difference_summary, compress=true)
     end
 
     if mode in (:t, :all)
@@ -331,8 +341,8 @@ function gamma_graphing(r)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    # main(1_000_000; mode=:means)
-    main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
+    main(1_000_000; mode=:means)
+    # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)

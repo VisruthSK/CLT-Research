@@ -241,7 +241,10 @@ ggsave(
 )
 
 exp_data <- t_stats |>
-  filter(str_detect(Distribution, "^Exponential")) |>
+  filter(
+    str_detect(Distribution, "^Exponential") |
+      Distribution == "Gamma{Float64}(α=1.0, θ=1.0)"
+  ) |>
   mutate(
     log_correction = log((Skewness / `Average Sample Skewness`) - 1),
     log_sample_size = log(`Sample Size`)
