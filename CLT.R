@@ -700,7 +700,43 @@ ggsave(
   dpi = poster_plot_dpi
 )
 
-# two sample
+correction_factor <- \(n) exp_corrected_skewness(1, n)
+
+corrected_sample_skewness_table <- tibble(
+  sample_skewness = df$Skewness / correction_factor(df$`Sample Size`),
+  min_n = df$`Sample Size`
+) |>
+  arrange(sample_skewness)
+
+corrected_sample_skewness_model <- lm(
+  sqrt(min_n) ~ sample_skewness,
+  data = corrected_sample_skewness_table
+)
+corrected_sample_skewness_model |> summary()
+
+corrected_sample_skewness_model_pred <- predict(
+  corrected_sample_skewness_model
+)^2
+corrected_sample_skewness_model_rmse <- sqrt(
+  mean(
+    (corrected_sample_skewness_table$min_n -
+      corrected_sample_skewness_model_pred)^2
+  )
+) |>
+  print()
+
+corrected_sample_skewness_formula <- \(x) (2 + 5.2 * x)^2
+corrected_sample_skewness_formula_rmse <- sqrt(
+  mean(
+    (corrected_sample_skewness_table$min_n -
+      corrected_sample_skewness_formula(
+        corrected_sample_skewness_table$sample_skewness
+      ))^2
+  )
+) |>
+  print()
+
+# ------------------------ two sample ------------------------
 
 diff_means <- read_csv("difference_means.csv.gz", show_col_types = FALSE) |>
   mutate(
