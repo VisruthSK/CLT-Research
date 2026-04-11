@@ -319,7 +319,7 @@ tibble(
 means_sample_skewness_breaks <- c(0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 slide_table <- c(10, 20, 35, 50, 100, 165)
 
-means_table_df <- read_csv("means.csv", show_col_types = FALSE) |>
+means_table_df <- read_csv("means.csv.gz", show_col_types = FALSE) |>
   filter(
     `Lower Tail` >= 0.02 & `Lower Tail` <= 0.03,
     `Upper Tail` >= 0.02 & `Upper Tail` <= 0.03

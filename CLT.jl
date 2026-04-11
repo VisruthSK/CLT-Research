@@ -315,7 +315,7 @@ function graphing(r)
         "Normal 30 Z-Scores" => normal30std,
     )
 
-    CSV.write("graphing.csv", graphing, compress=true)
+    CSV.write("graphing.csv.gz", graphing, compress=true)
 
     nothing
 end
@@ -335,7 +335,7 @@ function gamma_graphing(r)
         "Gamma 10 Z-Scores" => gamma10std,
     )
 
-    CSV.write("gamma_graphing.csv", graphing, compress=true)
+    CSV.write("gamma_graphing.csv.gz", graphing, compress=true)
 
     nothing
 end

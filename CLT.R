@@ -3,7 +3,7 @@ library(flextable)
 set.seed(0)
 
 # Figures
-df <- read_csv("means.csv") |>
+df <- read_csv("means.csv.gz") |>
   group_by(Distribution) |>
   mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
   filter(
@@ -20,12 +20,12 @@ ft <- flextable(df) |>
   autofit()
 
 save_as_image(ft, path = here::here("Figures", "table.png"), res = 2000)
-expected_n_distros <- read_csv("means.csv", show_col_types = FALSE) |>
+expected_n_distros <- read_csv("means.csv.gz", show_col_types = FALSE) |>
   summarize(n = n_distinct(Distribution)) |>
   pull(n)
 
-graphing <- read_csv("graphing.csv") |>
-  bind_cols(read_csv("gamma_graphing.csv"))
+graphing <- read_csv("graphing.csv.gz") |>
+  bind_cols(read_csv("gamma_graphing.csv.gz"))
 distro_plot <- function(col_name, x, y, title) {
   sample_size <- str_extract(col_name, "\\d+")
   upper <- sum(graphing[[col_name]] >= 1.96) / length(graphing[[col_name]])
@@ -143,7 +143,7 @@ x <- seq(0, 40, length.out = 100)
 y <- dgamma(x, shape = 16, rate = 1)
 distro_plot("Gamma 10 Z-Scores", x, y, "Gamma(16, 1) Population")
 
-read_csv("means.csv") |>
+read_csv("means.csv.gz") |>
   filter(`Sample Size` <= 500) |>
   mutate(
     Distribution = paste(
@@ -195,7 +195,7 @@ ggsave(
   dpi = 1000
 )
 
-read_csv("means.csv") |>
+read_csv("means.csv.gz") |>
   filter(`Sample Size` <= 500) |>
   mutate(
     Distribution = paste(
@@ -276,7 +276,7 @@ ggsave(
 
 n_per_bound <- function(percent) {
   bounds <- 0.025 * percent * c(-1, 1) + 0.025
-  temp <- read_csv("means.csv", show_col_types = FALSE) |>
+  temp <- read_csv("means.csv.gz", show_col_types = FALSE) |>
     group_by(Distribution) |>
     mutate(Distribution = str_replace(Distribution, "\\{.*\\}", " ")) |>
     filter(
@@ -647,7 +647,7 @@ ggsave(
 
 # two sample
 
-diff_means <- read_csv("difference_means.csv", show_col_types = FALSE) |>
+diff_means <- read_csv("difference_means.csv.gz", show_col_types = FALSE) |>
   mutate(
     Ratio = case_when(
       `Sample Size 2` == `Sample Size 1` ~ "1:1",
