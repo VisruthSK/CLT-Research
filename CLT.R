@@ -2,6 +2,9 @@ library(tidyverse)
 library(flextable)
 set.seed(0)
 
+poster_plot_dpi <- 400
+poster_table_res <- 600
+
 # Figures
 df <- read_csv("means.csv.gz") |>
   group_by(Distribution) |>
@@ -19,7 +22,11 @@ ft <- flextable(df) |>
   font(fontname = "Trebuchet MS") |>
   autofit()
 
-save_as_image(ft, path = here::here("Figures", "table.png"), res = 2000)
+save_as_image(
+  ft,
+  path = here::here("Figures", "table.png"),
+  res = poster_table_res
+)
 expected_n_distros <- read_csv("means.csv.gz", show_col_types = FALSE) |>
   summarize(n = n_distinct(Distribution)) |>
   pull(n)
@@ -115,7 +122,7 @@ distro_plot <- function(col_name, x, y, title) {
     plot = combined,
     width = 12,
     height = 6.75,
-    dpi = 200
+    dpi = poster_plot_dpi
   )
 }
 
@@ -146,6 +153,7 @@ distro_plot("Gamma 10 Z-Scores", x, y, "Gamma(16, 1) Population")
 read_csv("means.csv.gz") |>
   filter(`Sample Size` <= 500) |>
   mutate(
+    Total = `Upper Tail` + `Lower Tail`,
     Distribution = paste(
       str_replace(Distribution, "\\{.*\\}", " "),
       round(Skewness, 2)
@@ -192,52 +200,53 @@ ggsave(
   here::here("Figures", "Tail_Weights.png"),
   width = 12,
   height = 6.75,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
 
-read_csv("means.csv.gz") |>
-  filter(`Sample Size` <= 500) |>
-  mutate(
-    Distribution = paste(
-      str_replace(Distribution, "\\{.*\\}", " "),
-      round(Skewness, 2)
-    ),
-    Distribution = fct(
-      as.character(Distribution),
-      levels = as.character(unique(Distribution[order(-Skewness)]))
-    )
-  ) |>
-  arrange(Skewness) |>
-  ggplot(aes(x = `Sample Size`, color = Distribution)) +
-  geom_rect(
-    aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
-    fill = "grey",
-    linewidth = 0,
-    show.legend = FALSE
-  ) +
-  geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
-  geom_line(aes(y = `Total`), linewidth = 1) +
-  geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) +
-  annotate(
-    "text",
-    x = 40,
-    y = 0.04,
-    label = "n = 30",
-    hjust = 0,
-    size = 5,
-    color = "black"
-  ) +
-  labs(
-    title = "Total Tail Weights of Sampling Distributions",
-    x = "Sample Size",
-    y = "Tail Weight"
-  ) +
-  theme_bw() +
-  theme(
-    plot.title = element_text(size = 20),
-    axis.title = element_text(size = 17),
-    axis.text = element_text(size = 12)
-  )
+# read_csv("means.csv.gz") |>
+#   filter(`Sample Size` <= 500) |>
+#   mutate(
+#     Total = `Upper Tail` + `Lower Tail`,
+#     Distribution = paste(
+#       str_replace(Distribution, "\\{.*\\}", " "),
+#       round(Skewness, 2)
+#     ),
+#     Distribution = fct(
+#       as.character(Distribution),
+#       levels = as.character(unique(Distribution[order(-Skewness)]))
+#     )
+#   ) |>
+#   arrange(Skewness) |>
+#   ggplot(aes(x = `Sample Size`, color = Distribution)) +
+#   geom_rect(
+#     aes(xmin = 0, xmax = Inf, ymin = 0.02, ymax = 0.03),
+#     fill = "grey",
+#     linewidth = 0,
+#     show.legend = FALSE
+#   ) +
+#   geom_hline(yintercept = 0.025, linetype = "dashed", linewidth = 1) +
+#   geom_line(aes(y = `Total`), linewidth = 1) +
+#   geom_vline(xintercept = 30, linetype = "dashed", linewidth = 0.75) +
+#   annotate(
+#     "text",
+#     x = 40,
+#     y = 0.04,
+#     label = "n = 30",
+#     hjust = 0,
+#     size = 5,
+#     color = "black"
+#   ) +
+#   labs(
+#     title = "Total Tail Weights of Sampling Distributions",
+#     x = "Sample Size",
+#     y = "Tail Weight"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     plot.title = element_text(size = 20),
+#     axis.title = element_text(size = 17),
+#     axis.text = element_text(size = 12)
+#   )
 
 # Analysis
 model <- lm(Skewness ~ sqrt(`Sample Size`), df)
@@ -254,7 +263,7 @@ df |>
   ) +
   geom_line(linewidth = 1.5) +
   geom_point(size = 3) +
-  ggrepel::geom_label_repel(seed = 0, nudge_x = 1, size = 5) +
+  ggrepel::geom_label_repel(seed = 0, nudge_x = 1, size = 3) +
   labs(
     title = "Linear Relationship between Skewness and Empirical Minimum Square Root Sample Size",
     x = "Square Root of Sample Size",
@@ -271,7 +280,7 @@ ggsave(
   here::here("Figures", "Skew_Sample_Size.png"),
   width = 15,
   height = 8.5,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
 
 n_per_bound <- function(percent) {
@@ -292,7 +301,7 @@ n_per_bound <- function(percent) {
   coef(lm(Skewness ~ sqrt(`Sample Size`), temp))["sqrt(`Sample Size`)"]
 }
 
-x <- 30:6 / 100
+x <- 50:16 / 100
 y <- unname(sapply(x, n_per_bound))
 
 model <- lm(y ~ x)
@@ -318,7 +327,7 @@ ggsave(
   here::here("Figures", "20_percent.png"),
   width = 15,
   height = 8.5,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
 
 adjusted_skewness <- function(x) {
@@ -335,20 +344,46 @@ generate_data <- function(n, r, population_skews) {
     sampling_distribution(expr(rgamma(!!n, 16)), r),
     sampling_distribution(expr(rlnorm(!!n, 0, 0.25)), r),
     sampling_distribution(expr(rgamma(!!n, 4)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.35)), r),
+    sampling_distribution(expr(rgamma(!!n, 2.56)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.4)), r),
     sampling_distribution(expr(rgamma(!!n, 2)), r),
+    sampling_distribution(expr(rgamma(!!n, 1.78)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.45)), r),
+    sampling_distribution(expr(rgamma(!!n, 1.31)), r),
     sampling_distribution(expr(rlnorm(!!n, 0, 0.5)), r),
     sampling_distribution(expr(rgamma(!!n, 1)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.55)), r),
+    sampling_distribution(expr(rgamma(!!n, 0.79)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.6)), r),
     sampling_distribution(expr(rgamma(!!n, 0.64)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.65)), r),
+    sampling_distribution(expr(rgamma(!!n, 0.53)), r),
+    sampling_distribution(expr(rlnorm(!!n, 0, 0.7)), r),
+    sampling_distribution(expr(rgamma(!!n, 0.44)), r),
     sampling_distribution(expr(rlnorm(!!n, 0, 0.75)), r)
   )
   distribution_names <- c(
     "Gamma (α = 16, θ = 1)",
     "Log-normal (μ = 0, σ = 0.25)",
     "Gamma (α = 4, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.35)",
+    "Gamma (α = 2.56, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.4)",
     "Gamma (α = 2, θ = 1)",
+    "Gamma (α = 1.78, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.45)",
+    "Gamma (α = 1.31, θ = 1)",
     "Log-normal (μ = 0, σ = 0.5)",
     "Gamma (α = 1, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.55)",
+    "Gamma (α = 0.79, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.6)",
     "Gamma (α = 0.64, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.65)",
+    "Gamma (α = 0.53, θ = 1)",
+    "Log-normal (μ = 0, σ = 0.7)",
+    "Gamma (α = 0.44, θ = 1)",
     "Log-normal (μ = 0, σ = 0.75)"
   )
 
@@ -370,17 +405,37 @@ generate_data <- function(n, r, population_skews) {
 }
 
 skew_lnorm <- \(sigma) (exp(sigma^2) + 2) * sqrt(exp(sigma^2) - 1)
+skew_gamma <- \(alpha) 2 / sqrt(alpha)
 population_skews <- c(
-  0.5,
+  skew_gamma(16),
   skew_lnorm(0.25),
   1,
+  skew_lnorm(0.35),
+  skew_gamma(2.56),
+  skew_lnorm(0.4),
   sqrt(2),
+  skew_gamma(1.78),
+  skew_lnorm(0.45),
+  skew_gamma(1.31),
   skew_lnorm(0.5),
-  2,
-  2.5,
+  skew_gamma(1),
+  skew_lnorm(0.55),
+  skew_gamma(0.79),
+  skew_lnorm(0.6),
+  skew_gamma(0.64),
+  skew_lnorm(0.65),
+  skew_gamma(0.53),
+  skew_lnorm(0.7),
+  skew_gamma(0.44),
   skew_lnorm(0.75)
 )
-ns <- c(seq(10, 50, 10), seq(50, 200, 25)) |> unique()
+ns <- c(
+  seq(10, 100, 10),
+  seq(100, 200, 25),
+  seq(200, 500, 50),
+  seq(500, 1000, 200)
+) |>
+  unique()
 r <- 1e5
 
 skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |>
@@ -455,7 +510,7 @@ skew_data |>
     force = 2,
     nudge_x = 10,
     direction = "y",
-    max.overlaps = 17
+    max.overlaps = Inf
   ) +
   labs(
     title = "Convergence Rate of Sample Skewness to Population Skewness",
@@ -506,7 +561,7 @@ skew_data |>
     force = 2,
     nudge_x = 10,
     direction = "y",
-    max.overlaps = 17
+    max.overlaps = Inf
   ) +
   labs(
     title = "Convergence Rate of Sample Skewness to Population Skewness",
@@ -519,7 +574,7 @@ ggsave(
   here::here("Figures", "skewness_convergence.png"),
   width = 12,
   height = 6.75,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
 
 exp_data <- skew_data |>
@@ -544,7 +599,7 @@ ggsave(
   here::here("Figures", "exponential_correction.png"),
   width = 12,
   height = 6.75,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
 
 model <- lm(log_correction ~ log_sample_size, data = exp_data)
@@ -629,7 +684,7 @@ skew_data |>
     force = 2,
     nudge_x = 10,
     direction = "y",
-    max.overlaps = 17
+    max.overlaps = Inf
   ) +
   labs(
     x = "Sample Size",
@@ -642,7 +697,7 @@ ggsave(
   here::here("Figures", "corrected_sample_skewness.png"),
   width = 12,
   height = 6.75,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
 
 # two sample
@@ -691,7 +746,7 @@ c("1:1", "1:2", "1:3") |>
             ".png"
           )
         ),
-        res = 1000
+        res = poster_table_res
       )
   })
 
@@ -746,7 +801,7 @@ c("1:1", "1:2", "1:3") |>
       plot = p,
       width = 12,
       height = 6.75,
-      dpi = 1000
+      dpi = poster_plot_dpi
     )
   })
 
@@ -793,5 +848,5 @@ ggsave(
   here::here("Figures", "Skew_Sample_Size_Diff_Means.png"),
   width = 15,
   height = 8.5,
-  dpi = 1000
+  dpi = poster_plot_dpi
 )
