@@ -4,6 +4,19 @@ function t_statistic(data::Vector{Float64}; μ::Real)::Float64
     (mean(data) - μ) / (std(data) / sqrt(length(data)))
 end
 
+function two_sample_t_statistic(sample_1::Vector{Float64}, sample_2::Vector{Float64})::Float64
+    n1 = length(sample_1)
+    n2 = length(sample_2)
+    mean_1 = mean(sample_1)
+    mean_2 = mean(sample_2)
+    pooled_variance = (
+        (n1 - 1) * varm(sample_1, mean_1) +
+        (n2 - 1) * varm(sample_2, mean_2)
+    ) / (n1 + n2 - 2)
+
+    (mean_1 - mean_2) / sqrt(pooled_variance * (1 / n1 + 1 / n2))
+end
+
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Tuple{Vector{Float64},Float64}
     rng = MersenneTwister(0)
     # Preallocating vectors for speed
@@ -55,7 +68,7 @@ function analysis_studentized(statistic::Function, d::Distribution, n::Int, r::I
     (md, IQR, upper, lower, skewness, average_sample_skewness, kurtosis)
 end
 
-function sampling_distribution_two_groups(statistic::Function, d::Distribution, n1::Int, n2::Int, r::Int; args...)::Tuple{Vector{Float64},Float64}
+function sampling_distribution_difference_in_means(d::Distribution, n1::Int, n2::Int, r::Int)::Tuple{Vector{Float64},Float64}
     rng = MersenneTwister(0)
     difference_statistics = zeros(r)
     sample_1 = zeros(n1)
@@ -65,29 +78,53 @@ function sampling_distribution_two_groups(statistic::Function, d::Distribution, 
     @inbounds for i in 1:r
         rand!(rng, d, sample_1)
         rand!(rng, d, sample_2)
-        g1 = statistic(sample_1; args...)::Float64
-        g2 = statistic(sample_2; args...)::Float64
-        difference_statistics[i] = g1 - g2
+        difference_statistics[i] = mean(sample_1) - mean(sample_2)
         sample_skewness_total += (StatsBase.skewness(sample_1) + StatsBase.skewness(sample_2)) / 2
     end
 
     (difference_statistics, sample_skewness_total / r)
 end
 
-function analysis_difference_in_means(statistic::Function, d::Distribution, n1::Int, n2::Int, r::Int, σ::Real, critical::Float64; args...)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64,Float64}
-    difference_statistics, average_sample_skewness = sampling_distribution_two_groups(statistic, d, n1, n2, r; args...)
+function analysis_difference_in_means(d::Distribution, n1::Int, n2::Int, r::Int, σ::Real, critical::Float64)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64,Float64}
+    difference_statistics, average_sample_skewness = sampling_distribution_difference_in_means(d, n1, n2, r)
     skewness = StatsBase.skewness(difference_statistics)
     kurtosis = StatsBase.kurtosis(difference_statistics)
 
     md = median(difference_statistics)
     IQR = quantile(difference_statistics, 0.75) - quantile(difference_statistics, 0.25)
+    cutoff = critical * σ * sqrt(1 / n1 + 1 / n2)
+    upper = sum(difference_statistics .>= cutoff) / r
+    lower = sum(difference_statistics .<= -cutoff) / r
 
-    z_scores = zeros(r)
-    sd_difference = σ * sqrt(1 / n1 + 1 / n2)
-    zscore!(z_scores, difference_statistics, 0.0, sd_difference)
+    (md, IQR, upper, lower, skewness, average_sample_skewness, kurtosis)
+end
 
-    upper = sum(z_scores .>= critical) / r
-    lower = sum(z_scores .<= -critical) / r
+function sampling_distribution_two_sample_t(d::Distribution, n1::Int, n2::Int, r::Int)::Tuple{Vector{Float64},Float64}
+    rng = MersenneTwister(0)
+    t_statistics = zeros(r)
+    sample_1 = zeros(n1)
+    sample_2 = zeros(n2)
+    sample_skewness_total = 0.0
+
+    @inbounds for i in 1:r
+        rand!(rng, d, sample_1)
+        rand!(rng, d, sample_2)
+        t_statistics[i] = two_sample_t_statistic(sample_1, sample_2)
+        sample_skewness_total += (StatsBase.skewness(sample_1) + StatsBase.skewness(sample_2)) / 2
+    end
+
+    (t_statistics, sample_skewness_total / r)
+end
+
+function analysis_two_sample_t(d::Distribution, n1::Int, n2::Int, r::Int, critical::Float64)::Tuple{Float64,Float64,Float64,Float64,Float64,Float64,Float64}
+    t_statistics, average_sample_skewness = sampling_distribution_two_sample_t(d, n1, n2, r)
+    skewness = StatsBase.skewness(t_statistics)
+    kurtosis = StatsBase.kurtosis(t_statistics)
+
+    md = median(t_statistics)
+    IQR = quantile(t_statistics, 0.75) - quantile(t_statistics, 0.25)
+    upper = sum(t_statistics .>= critical) / r
+    lower = sum(t_statistics .<= -critical) / r
 
     (md, IQR, upper, lower, skewness, average_sample_skewness, kurtosis)
 end
@@ -175,8 +212,7 @@ function analyze_t_statistics(r::Int, sample_sizes::Vector{Int}, critical::Funct
     sort!(results, [:Distribution, :"Sample Size"])
 end
 
-function analyze_difference_in_means(statistic::Function, r::Int, sample_sizes::Vector{Int}, ratios::Vector{Tuple{Int,Int}}, critical::Function, distributions)::DataFrame
-    println("Analyzing sampling distributions of difference in $(statistic)s with $(r) repetitions")
+function empty_two_sample_summary()::DataFrame
     summary = DataFrame(
         "Distribution" => String[],
         "Skewness" => Float64[],
@@ -193,24 +229,67 @@ function analyze_difference_in_means(statistic::Function, r::Int, sample_sizes::
         "Population SD" => Float64[]
     )
 
+    summary
+end
+
+function analyze_difference_in_means(::typeof(mean), r::Int, sample_sizes::Vector{Int}, ratios::Vector{Tuple{Int,Int}}, critical::Function, distributions)::DataFrame
+    println("Analyzing sampling distributions of difference in means with $(r) repetitions")
+    summary = empty_two_sample_summary()
+
     for d::Distribution in distributions
         println(string(d))
         μ = mean(d)
         σ = std(d)
         skewness = StatsBase.skewness(d)
 
-        for n in sample_sizes
+        u = Threads.SpinLock()
+        @inbounds Threads.@threads for n in sample_sizes
             for ratio in ratios
                 n1 = n
                 n2 = cld(ratio[1] * n, ratio[2])
 
                 md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis = analysis_difference_in_means(
-                    statistic, d, n1, n2, r, σ, abs(critical(n1, n2))
+                    d, n1, n2, r, σ, abs(critical(n1, n2))
                 )
-                push!(
-                    summary,
-                    (string(d), skewness, n1, n2, md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis, μ, σ)
+                Threads.lock(u) do
+                    push!(
+                        summary,
+                        (string(d), skewness, n1, n2, md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis, μ, σ)
+                    )
+                end
+            end
+        end
+    end
+
+    sort!(summary, [:Distribution, :"Sample Size 1", :"Sample Size 2"])
+    summary
+end
+
+function analyze_two_sample_t_statistics(r::Int, sample_sizes::Vector{Int}, ratios::Vector{Tuple{Int,Int}}, critical::Function, distributions)::DataFrame
+    println("Analyzing sampling distributions of two-sample t statistics with $(r) repetitions")
+    summary = empty_two_sample_summary()
+
+    for d::Distribution in distributions
+        println(string(d))
+        μ = mean(d)
+        σ = std(d)
+        skewness = StatsBase.skewness(d)
+
+        u = Threads.SpinLock()
+        @inbounds Threads.@threads for n in sample_sizes
+            for ratio in ratios
+                n1 = n
+                n2 = cld(ratio[1] * n, ratio[2])
+
+                md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis = analysis_two_sample_t(
+                    d, n1, n2, r, abs(critical(n1, n2))
                 )
+                Threads.lock(u) do
+                    push!(
+                        summary,
+                        (string(d), skewness, n1, n2, md, IQR, upper, lower, sampling_skewness, average_sample_skewness, sample_kurtosis, μ, σ)
+                    )
+                end
             end
         end
     end
@@ -244,9 +323,10 @@ function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 
     ratios = [(1, 1), (1, 2), (1, 3)]
     zstar = quantile(Normal(), 0.975)
     tstar = n -> quantile(TDist(n - 1), 0.975)
+    two_sample_tstar = (n1, n2) -> quantile(TDist(n1 + n2 - 2), 0.975)
     critical_mean = n -> zstar
     critical_diff = (n1, n2) -> zstar
-    valid_modes = (:means, :difference_in_means, :both, :t, :all)
+    valid_modes = (:means, :difference_in_means, :both, :t, :two_sample_t, :all)
 
     mode in valid_modes || throw(ArgumentError("Unsupported mode $(mode). Valid modes are $(valid_modes)."))
 
@@ -263,6 +343,13 @@ function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 
     if mode in (:t, :all)
         t_summary::DataFrame = analyze_t_statistics(r, sample_sizes, tstar, distributions)
         CSV.write("t_statistics.csv.gz", t_summary, compress=true)
+    end
+
+    if mode in (:two_sample_t, :all)
+        two_sample_t_summary = analyze_two_sample_t_statistics(
+            r, sample_sizes, ratios, two_sample_tstar, distributions
+        )
+        CSV.write("two_sample_t_statistics.csv.gz", two_sample_t_summary, compress=true)
     end
 
     nothing
@@ -341,9 +428,10 @@ function gamma_graphing(r)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main(1_000_000; mode=:means)
+    # main(1_000_000; mode=:means)
     # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
+    main(1_000_000; mode=:two_sample_t)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
 end
