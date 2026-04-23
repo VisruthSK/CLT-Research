@@ -17,6 +17,123 @@ function two_sample_t_statistic(sample_1::Vector{Float64}, sample_2::Vector{Floa
     (mean_1 - mean_2) / sqrt(pooled_variance * (1 / n1 + 1 / n2))
 end
 
+function bootstrap_distribution(statistic::Function, data::Vector{Float64}, r::Int; args...)::Vector{Float64}
+    rng = MersenneTwister(0)
+    statistics = zeros(r)
+    bootstrap_sample = zeros(length(data))
+
+    @inbounds for i in 1:r
+        StatsBase.sample!(rng, data, bootstrap_sample; replace=true)
+        statistics[i] = statistic(bootstrap_sample; args...)::Float64
+    end
+
+    statistics
+end
+
+function bootstrap_distribution(statistic::Function, sample_1::Vector{Float64}, sample_2::Vector{Float64}, r::Int)::Vector{Float64}
+    rng = MersenneTwister(0)
+    statistics = zeros(r)
+    bootstrap_1 = zeros(length(sample_1))
+    bootstrap_2 = zeros(length(sample_2))
+
+    @inbounds for i in 1:r
+        StatsBase.sample!(rng, sample_1, bootstrap_1; replace=true)
+        StatsBase.sample!(rng, sample_2, bootstrap_2; replace=true)
+        statistics[i] = statistic(bootstrap_1, bootstrap_2)::Float64
+    end
+
+    statistics
+end
+
+bootstrap_skewness_distribution(data::Vector{Float64}, r::Int)::Vector{Float64} =
+    bootstrap_distribution(StatsBase.skewness, data, r)
+
+bootstrap_skewness_estimate(data::Vector{Float64}, r::Int)::Float64 =
+    mean(bootstrap_skewness_distribution(data, r))
+
+bias_corrected_skewness_estimate(data::Vector{Float64}, r::Int)::Float64 =
+    2 * StatsBase.skewness(data) - bootstrap_skewness_estimate(data, r)
+
+function bootstrap_skewness_accuracy(d::Distribution, n::Int, r::Int, boot_r::Int)::NamedTuple
+    rng = MersenneTwister(0)
+    sample = zeros(n)
+    sample_skewnesses = zeros(r)
+    corrected_skewnesses = zeros(r)
+    pop_skewness = StatsBase.skewness(d)
+
+    @inbounds for i in 1:r
+        rand!(rng, d, sample)
+        sample_skewnesses[i] = StatsBase.skewness(sample)
+        corrected_skewnesses[i] = bias_corrected_skewness_estimate(sample, boot_r)
+    end
+
+    (
+        pop_skewness=pop_skewness,
+        mean_sample_skewness=mean(sample_skewnesses),
+        mean_corrected_skewness=mean(corrected_skewnesses),
+        sample_percent=100 * mean(sample_skewnesses) / pop_skewness,
+        corrected_percent=100 * mean(corrected_skewnesses) / pop_skewness,
+    )
+end
+
+function bootstrap_skewness_accuracy_table(distributions, sample_sizes::Vector{Int}, r::Int, boot_r::Int)::DataFrame
+    results = DataFrame(
+        "Distribution" => String[],
+        "Population Skewness" => Float64[],
+        "Sample Size" => Int64[],
+        "Mean Sample Skewness" => Float64[],
+        "Mean Bias Corrected Skewness" => Float64[],
+        "Sample Percent" => Float64[],
+        "Bias Corrected Percent" => Float64[],
+    )
+
+    for d in distributions
+        for n in sample_sizes
+            row = bootstrap_skewness_accuracy(d, n, r, boot_r)
+            push!(
+                results,
+                (
+                    string(d),
+                    row.pop_skewness,
+                    n,
+                    row.mean_sample_skewness,
+                    row.mean_corrected_skewness,
+                    row.sample_percent,
+                    row.corrected_percent,
+                ),
+            )
+        end
+    end
+
+    results
+end
+
+function bootstrap_skewness_accuracy_table(r::Int, boot_r::Int; sample_sizes::Vector{Int}=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500])::DataFrame
+    distributions = [
+        Gamma(4),
+        LogNormal(0, 0.35),
+        Gamma(2.56),
+        LogNormal(0, 0.4),
+        Gamma(2),
+        Gamma(1.78),
+        LogNormal(0, 0.45),
+        Gamma(1.31),
+        LogNormal(0, 0.5),
+        Gamma(1),
+        LogNormal(0, 0.55),
+        Gamma(0.79),
+        LogNormal(0, 0.6),
+        Gamma(0.64),
+        LogNormal(0, 0.65),
+        Gamma(0.53),
+        LogNormal(0, 0.7),
+        Gamma(0.44),
+        LogNormal(0, 0.75)
+    ]
+
+    bootstrap_skewness_accuracy_table(distributions, sample_sizes, r, boot_r)
+end
+
 function sampling_distribution(statistic::Function, d::Distribution, n::Int, r::Int; args...)::Tuple{Vector{Float64},Float64}
     rng = MersenneTwister(0)
     # Preallocating vectors for speed
@@ -431,7 +548,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # main(1_000_000; mode=:means)
     # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
-    main(1_000_000; mode=:two_sample_t)
+    # main(1_000_000; mode=:two_sample_t)
+    bootstrap_skewness = bootstrap_skewness_accuracy_table(100_000, 5_000)
+    CSV.write("bootstrap_skewness_accuracy.csv.gz", bootstrap_skewness, compress=true)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
 end

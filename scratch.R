@@ -381,7 +381,9 @@ t_corrected_sample_skewness_model_rmse <- sqrt(
 t_corrected_sample_skewness_formula_coeffs <- round(
   coef(t_corrected_sample_skewness_model),
   1
-)
+) |>
+  print()
+
 t_corrected_sample_skewness_formula <- \(x) {
   (t_corrected_sample_skewness_formula_coeffs[1] +
     t_corrected_sample_skewness_formula_coeffs[2] * x)^2
