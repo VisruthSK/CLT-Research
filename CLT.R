@@ -438,8 +438,8 @@ ns <- c(
   unique()
 r <- 1e5
 
-skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |>
-  write_csv(here::here("skew_data.csv"))
+# skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |>
+#   write_csv(here::here("skew_data.csv"))
 skew_data <- read_csv(here::here("skew_data.csv"))
 
 skew_data |>
@@ -461,63 +461,6 @@ skew_data |>
     color = "Sample Size"
   ) +
   theme_bw()
-
-skew_data |>
-  mutate(
-    percent = mean_sampling_skewness / pop_skewness,
-    distribution = paste(
-      distribution,
-      round(pop_skewness, 2)
-    ),
-    distribution = fct(
-      distribution,
-      levels = unique(distribution[order(pop_skewness)])
-    )
-  ) |>
-  ggplot(
-    aes(x = sample_size, y = percent, color = distribution)
-  ) +
-  geom_point() +
-  geom_line() +
-  geom_hline(yintercept = 1) +
-  theme_bw() +
-  theme(
-    plot.title = element_text(size = 20),
-    axis.title = element_text(size = 17),
-    axis.text = element_text(size = 12)
-  ) +
-  ggrepel::geom_label_repel(
-    data = skew_data |>
-      mutate(
-        percent = mean_sampling_skewness / pop_skewness,
-        distribution = paste(
-          distribution,
-          round(pop_skewness, 2)
-        ),
-        distribution = fct(
-          distribution,
-          levels = unique(distribution[order(pop_skewness)])
-        )
-      ) |>
-      group_by(pop_skewness) |>
-      slice_tail(n = 1),
-    aes(label = round(percent, 2), x = sample_size + 0.5),
-    show.legend = FALSE,
-    size = 3.5,
-    fontface = "bold",
-    segment.color = "grey",
-    min.segment.length = 0,
-    force = 2,
-    nudge_x = 10,
-    direction = "y",
-    max.overlaps = Inf
-  ) +
-  labs(
-    title = "Convergence Rate of Sample Skewness to Population Skewness",
-    x = "Sample Size",
-    y = "Percent of Population Skewness",
-    color = "Distribution"
-  )
 
 skew_data |>
   mutate(
@@ -609,30 +552,6 @@ coeffs <- coef(model)
 exp_corrected_skewness <- \(skew, n) {
   unname(skew * (exp(coeffs[1] + coeffs[2] * log(n)) + 1))
 }
-
-skew_data |>
-  mutate(
-    corrected_skew = exp_corrected_skewness(
-      mean_sampling_skewness,
-      sample_size
-    ),
-    percent = corrected_skew / pop_skewness,
-    distribution = fct(
-      distribution,
-      levels = unique(distribution[order(pop_skewness)])
-    )
-  ) |>
-  ggplot(aes(x = sample_size, y = percent, color = distribution)) +
-  geom_point() +
-  geom_line() +
-  geom_hline(yintercept = 1) +
-  theme_bw() +
-  labs(
-    x = "Sample Size",
-    y = "Percentage of Population Skewness",
-    title = "Corrected Sample Skewnesses",
-    color = "Distribution"
-  )
 
 skew_data |>
   mutate(
@@ -735,6 +654,42 @@ corrected_sample_skewness_formula_rmse <- sqrt(
   )
 ) |>
   print()
+
+corrected_sample_skewness_model_line <- tibble(
+  sample_skewness = seq(
+    min(corrected_sample_skewness_table$sample_skewness),
+    max(corrected_sample_skewness_table$sample_skewness),
+    length.out = 100
+  )
+) |>
+  mutate(
+    sample_size = predict(
+      corrected_sample_skewness_model,
+      newdata = pick(everything())
+    )^2
+  )
+
+corrected_sample_skewness_model_line |>
+  ggplot(aes(x = sample_skewness, y = sample_size)) +
+  geom_line(linewidth = 1.5) +
+  labs(
+    title = "Sample Skewness vs Sample Size",
+    x = "Sample Skewness",
+    y = "Sample Size"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 23),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
+
+ggsave(
+  here::here("Figures", "Sample_Skewness_Sample_Size.png"),
+  width = 15,
+  height = 8.5,
+  dpi = poster_plot_dpi
+)
 
 # ------------------------ two sample ------------------------
 
