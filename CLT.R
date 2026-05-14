@@ -438,6 +438,7 @@ ns <- c(
   unique()
 r <- 1e5
 
+# TODO: extend this to lower skewnesses, missing small skew Gamma and log normal
 # skew_data <- map_df(ns, \(n) generate_data(n, r, population_skews)) |>
 #   write_csv(here::here("skew_data.csv"))
 skew_data <- read_csv(here::here("skew_data.csv"))
@@ -519,6 +520,58 @@ ggsave(
   height = 6.75,
   dpi = poster_plot_dpi
 )
+
+plot_skew_conv <- function(df) {
+  df |>
+    ggplot(
+      aes(x = sample_size, y = mean_sampling_skewness, color = distribution)
+    ) +
+    geom_point() +
+    geom_line() +
+    geom_hline(
+      aes(yintercept = pop_skewness, color = distribution),
+      linetype = "dashed",
+      show.legend = FALSE
+    ) +
+    scale_color_discrete(drop = FALSE) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 20),
+      axis.title = element_text(size = 17),
+      axis.text = element_text(size = 12),
+      legend.position = "none"
+    ) +
+    labs(
+      title = "Convergence Rate of Sample Skewness to Population Skewness",
+      x = "Sample Size",
+      y = "Mean Sampling Skewness",
+      color = "Population Skewness"
+    )
+}
+
+skew_data |>
+  mutate(
+    distribution = round(pop_skewness, 2),
+    distribution = fct(
+      as.character(distribution),
+      levels = as.character(unique(distribution[order(pop_skewness)]))
+    )
+  ) |>
+  filter(distribution %in% c("0.5", "2", "3.26")) |>
+  group_split(distribution) |>
+  walk(\(df) {
+    dist_file <- gsub("\\.", "_", as.character(unique(df$distribution)))
+
+    df |>
+      plot_skew_conv() |>
+      ggsave(
+        filename = glue::glue("Figures/skew_convergence_{dist_file}.png"),
+        plot = _,
+        width = 12,
+        height = 6.75,
+        dpi = poster_plot_dpi
+      )
+  })
 
 exp_data <- skew_data |>
   filter(distribution == "Gamma (α = 1, θ = 1)") |>
@@ -670,16 +723,20 @@ corrected_sample_skewness_model_line <- tibble(
   )
 
 corrected_sample_skewness_model_line |>
-  ggplot(aes(x = sample_skewness, y = sample_size)) +
-  geom_line(linewidth = 1.5) +
+  ggplot(aes(sample_skewness, sample_size)) +
+  geom_line(
+    linewidth = 1.5,
+    color = "#08519C"
+  ) +
   labs(
-    title = "Sample Skewness vs Sample Size",
+    title = "Sample Size vs Sample Skewness (1 sample means)",
     x = "Sample Skewness",
     y = "Sample Size"
   ) +
-  theme_bw() +
+  coord_cartesian(expand = FALSE) +
+  theme_bw(base_size = 18) +
   theme(
-    plot.title = element_text(size = 23),
+    plot.title = element_text(size = 24),
     axis.title = element_text(size = 17),
     axis.text = element_text(size = 12)
   )
