@@ -33,6 +33,7 @@ expected_n_distros <- read_csv("means.csv.gz", show_col_types = FALSE) |>
 
 graphing <- read_csv("graphing.csv.gz") |>
   bind_cols(read_csv("gamma_graphing.csv.gz"))
+
 distro_plot <- function(col_name, x, y, title) {
   sample_size <- str_extract(col_name, "\\d+")
   upper <- sum(graphing[[col_name]] >= 1.96) / length(graphing[[col_name]])
@@ -521,25 +522,42 @@ ggsave(
   dpi = poster_plot_dpi
 )
 
-plot_skew_conv <- function(df) {
+plot_skew_conv <- function(df, legend_position = "right") {
+  legend_breaks <- levels(droplevels(df$distribution))
+
+  hline_data <- df |>
+    distinct(distribution, pop_skewness)
+
   df |>
     ggplot(
-      aes(x = sample_size, y = mean_sampling_skewness, color = distribution)
+      aes(
+        x = sample_size,
+        y = mean_sampling_skewness,
+        color = distribution
+      )
     ) +
     geom_point() +
     geom_line() +
-    geom_hline(
-      aes(yintercept = pop_skewness, color = distribution),
-      linetype = "dashed",
-      show.legend = FALSE
+    # geom_hline(
+    #   data = hline_data,
+    #   aes(
+    #     yintercept = pop_skewness,
+    #     color = distribution
+    #   ),
+    #   linetype = "dashed",
+    #   show.legend = FALSE
+    # ) +
+    scale_color_manual(
+      values = full_dist_colors,
+      limits = full_dist_levels,
+      breaks = legend_breaks
     ) +
-    scale_color_discrete(drop = FALSE) +
     theme_bw() +
     theme(
       plot.title = element_text(size = 20),
       axis.title = element_text(size = 17),
       axis.text = element_text(size = 12),
-      legend.position = "none"
+      legend.position = legend_position
     ) +
     labs(
       title = "Convergence Rate of Sample Skewness to Population Skewness",
@@ -549,7 +567,18 @@ plot_skew_conv <- function(df) {
     )
 }
 
-skew_data |>
+target_dists <- c("0.5", "2", "3.26")
+
+full_dist_levels <- plot_data |>
+  pull(distribution) |>
+  levels()
+
+full_dist_colors <- setNames(
+  scales::hue_pal()(length(full_dist_levels)),
+  full_dist_levels
+)
+
+plot_data <- skew_data |>
   mutate(
     distribution = round(pop_skewness, 2),
     distribution = fct(
@@ -557,12 +586,16 @@ skew_data |>
       levels = as.character(unique(distribution[order(pop_skewness)]))
     )
   ) |>
-  filter(distribution %in% c("0.5", "2", "3.26")) |>
-  group_split(distribution) |>
-  walk(\(df) {
-    dist_file <- gsub("\\.", "_", as.character(unique(df$distribution)))
+  filter(distribution %in% target_dists)
 
-    df |>
+target_dists |>
+  walk(\(dist) {
+    dist_file <- gsub("\\.", "_", dist)
+
+    plot_data |>
+      filter(
+        distribution %in% target_dists[seq_len(match(dist, target_dists))]
+      ) |>
       plot_skew_conv() |>
       ggsave(
         filename = glue::glue("Figures/skew_convergence_{dist_file}.png"),
