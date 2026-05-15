@@ -781,6 +781,79 @@ ggsave(
   dpi = poster_plot_dpi
 )
 
+# t stats two sided
+tibble(
+  sample_skewness = seq(
+    min(t_corrected_sample_skewness_table$sample_skewness),
+    max(t_corrected_sample_skewness_table$sample_skewness),
+    length.out = 100
+  )
+) |>
+  mutate(
+    sample_size = predict(
+      t_corrected_sample_skewness_model,
+      newdata = pick(sample_skewness)
+    )^2
+  ) |>
+  ggplot(aes(sample_skewness, sample_size)) +
+  geom_line(
+    linewidth = 1.5,
+    color = "#08519C"
+  ) +
+  geom_point(
+    data = tibble(
+      sample_skewness = 0.595,
+      required_n = 81
+    ),
+    aes(sample_skewness, required_n),
+    inherit.aes = FALSE,
+    size = 4,
+    color = "#D62728"
+  ) +
+  geom_text(
+    data = tibble(
+      sample_skewness = 0.595,
+      required_n = 81
+    ),
+    aes(
+      sample_skewness,
+      required_n,
+      label = "Party-arrival data"
+    ),
+    inherit.aes = FALSE,
+    nudge_x = 0.035,
+    nudge_y = 5,
+    hjust = 0,
+    color = "#D62728",
+    size = 4
+  ) +
+  labs(
+    title = "Minimum Sample Size vs Sample Skewness (Two-Tailed <i>t</i>-Statistics)",
+    x = "Sample Skewness",
+    y = "Sample Size"
+  ) +
+  coord_cartesian(expand = FALSE) +
+  theme_bw(base_size = 18) +
+  theme(
+    plot.title = ggtext::element_markdown(size = 24),
+    axis.title = element_text(size = 17),
+    axis.text = element_text(size = 12)
+  )
+
+ggsave(
+  filename = here::here(
+    "Figures",
+    paste0(
+      "Corrected_Sample_Skewness_Sample_Size_t_statistics_",
+      on,
+      ".png"
+    )
+  ),
+  width = 15,
+  height = 8.5,
+  dpi = plot_dpi
+)
+
 # ------------------------ two sample ------------------------
 
 diff_means <- read_csv("difference_means.csv.gz", show_col_types = FALSE) |>
