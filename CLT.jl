@@ -1,4 +1,4 @@
-using Distributions, Random, DataFrames, CSV, StatsBase, Statistics
+using Distributions, Random, DataFrames, CSV, StatsBase, Statistics, Bootstrap
 
 function t_statistic(data::Vector{Float64}; μ::Real)::Float64
     (mean(data) - μ) / (std(data) / sqrt(length(data)))
@@ -298,6 +298,44 @@ function analyze_two_sample_t_statistics(r::Int, sample_sizes::Vector{Int}, rati
     summary
 end
 
+function analyze_bootstrap(r::Int, sample_sizes::Vector{Int}, distributions; r_boot::Int=5000)::DataFrame
+    println("Analyzing bootstrap skewness with $(r) repetitions and $(r_boot) bootstrap samples")
+    results = DataFrame(
+        "Distribution" => String[],
+        "Sample Size" => Int64[],
+        "Sampling Skewness" => Float64[],
+        "Bootstrap Skewness" => Float64[]
+    )
+
+    for d::Distribution in distributions
+        println(string(d))
+        u = Threads.SpinLock()
+        @inbounds Threads.@threads for n in sample_sizes
+            # 1. Compute sampling distribution skewness
+            sampling_means, _ = sampling_distribution(mean, d, n, r)
+            sampling_skewness = StatsBase.skewness(sampling_means)
+
+            # 2. Compute average bootstrap skewness over a subset of samples
+            n_samples = min(r, 200)
+            bootstrap_skews = zeros(n_samples)
+            
+            for i in 1:n_samples
+                rng = MersenneTwister(i + n)
+                sample = rand(rng, d, n)
+                bs = bootstrap(mean, sample, BasicSampling(r_boot))
+                bootstrap_skews[i] = StatsBase.skewness(bs.t1[1])
+            end
+            bootstrap_skewness = mean(bootstrap_skews)
+
+            Threads.lock(u) do
+                push!(results, (string(d), n, sampling_skewness, bootstrap_skewness))
+            end
+        end
+    end
+
+    sort!(results, [:Distribution, :"Sample Size"])
+end
+
 function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500])
     distributions = [
         Gamma(16, 1),
@@ -328,7 +366,7 @@ function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 
     two_sample_tstar = (n1, n2) -> quantile(TDist(n1 + n2 - 2), 0.975)
     critical_mean = n -> zstar
     critical_diff = (n1, n2) -> zstar
-    valid_modes = (:means, :difference_in_means, :both, :t, :two_sample_t, :all)
+    valid_modes = (:means, :difference_in_means, :both, :t, :two_sample_t, :bootstrap, :all)
 
     mode in valid_modes || throw(ArgumentError("Unsupported mode $(mode). Valid modes are $(valid_modes)."))
 
@@ -352,6 +390,11 @@ function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 
             r, sample_sizes, ratios, two_sample_tstar, distributions
         )
         CSV.write("two_sample_t_statistics.csv.gz", two_sample_t_summary, compress=true)
+    end
+
+    if mode in (:bootstrap, :all)
+        bootstrap_summary = analyze_bootstrap(r, sample_sizes, distributions)
+        CSV.write("bootstrap_comparison.csv.gz", bootstrap_summary, compress=true)
     end
 
     nothing
@@ -430,10 +473,11 @@ function gamma_graphing(r)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main(1_000_000; mode=:means)
+    # main(1_000_000; mode=:means)
     # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
     # main(1_000_000; mode=:two_sample_t)
+    main(10_000; mode=:bootstrap)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
 end
