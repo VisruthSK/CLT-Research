@@ -329,7 +329,7 @@ function analyze_bootstrap(r::Int, sample_sizes::Vector{Int}, distributions; r_b
             sampling_lower = sum(z_scores .<= -zstar) / r
 
             # 2. Compute average bootstrap skewness and tails over a subset of samples
-            n_samples = min(r, 500)
+            n_samples = min(r, 10000)
             bootstrap_skews = zeros(n_samples)
             bootstrap_uppers = zeros(n_samples)
             bootstrap_lowers = zeros(n_samples)
