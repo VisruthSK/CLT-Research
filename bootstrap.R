@@ -173,4 +173,111 @@ ggsave(
   dpi = poster_plot_dpi
 )
 
+# ==============================================================================
+# PART 2: Expected Sample Skewness Bias Correction and Modeling
+# ==============================================================================
+# Load skew_data.csv to model the sample skewness downward bias
+skew_data <- read_csv("skew_data.csv", show_col_types = FALSE)
+
+exp_data <- skew_data |>
+  filter(distribution == "Gamma (α = 1, θ = 1)") |>
+  mutate(
+    log_correction = log((pop_skewness / mean_sampling_skewness) - 1),
+    log_sample_size = log(sample_size)
+  )
+model_bias <- lm(log_correction ~ log_sample_size, data = exp_data)
+coeffs <- coef(model_bias)
+
+exp_corrected_skewness <- \(skew, n) {
+  unname(skew * (exp(coeffs[1] + coeffs[2] * log(n)) + 1))
+}
+correction_factor <- \(n) exp_corrected_skewness(1, n)
+
+# Apply correction factor to compute expected sample skewness at minimum N
+corrected_clt_table <- sampling_nominal |>
+  select(Distribution, Skewness, min_n = Sampling_N) |>
+  mutate(sample_skewness = Skewness / correction_factor(min_n))
+
+corrected_bootstrap_table <- df_nominal |>
+  select(Distribution, Skewness, min_n = `Sample Size`) |>
+  mutate(sample_skewness = Skewness / correction_factor(min_n))
+
+# Fit the models: sqrt(min_n) ~ sample_skewness
+corrected_sample_skewness_model <- lm(
+  sqrt(min_n) ~ sample_skewness,
+  data = corrected_clt_table
+)
+corrected_bootstrap_model <- lm(
+  sqrt(min_n) ~ sample_skewness,
+  data = corrected_bootstrap_table
+)
+
+cat("\nCorrected Sample Skewness CLT Model:\n")
+print(summary(corrected_sample_skewness_model))
+cat("\nCorrected Sample Skewness Bootstrap Model:\n")
+print(summary(corrected_bootstrap_model))
+
+# Create comparison plot
+clt_sample_points <- corrected_clt_table |>
+  select(sample_skewness, min_n) |>
+  mutate(Type = "CLT (Sampling)")
+
+boot_sample_points <- corrected_bootstrap_table |>
+  select(sample_skewness, min_n) |>
+  mutate(Type = "Bootstrap")
+
+combined_sample_df <- bind_rows(clt_sample_points, boot_sample_points)
+
+sample_skewness_seq <- seq(
+  min(combined_sample_df$sample_skewness),
+  max(combined_sample_df$sample_skewness),
+  length.out = 100
+)
+
+line_clt <- tibble(
+  sample_skewness = sample_skewness_seq,
+  Type = "CLT (Sampling)"
+) |>
+  mutate(sample_size = predict(corrected_sample_skewness_model, newdata = pick(sample_skewness))^2)
+
+line_boot <- tibble(
+  sample_skewness = sample_skewness_seq,
+  Type = "Bootstrap"
+) |>
+  mutate(sample_size = predict(corrected_bootstrap_model, newdata = pick(sample_skewness))^2)
+
+combined_lines <- bind_rows(line_clt, line_boot)
+
+combined_sample_df |>
+  ggplot(aes(x = sample_skewness, y = min_n, color = Type, shape = Type)) +
+  geom_point(size = 3) +
+  geom_line(data = combined_lines, aes(y = sample_size), linewidth = 1.5) +
+  labs(
+    title = "Sample Size vs. Expected Sample Skewness (CLT vs. Bootstrap)",
+    subtitle = sprintf(
+      "CLT: N = (%.4f * S + %.4f)² (RMSE = %.3f)\nBootstrap: N = (%.4f * S + %.4f)² (RMSE = %.3f)",
+      coef(corrected_sample_skewness_model)[2], coef(corrected_sample_skewness_model)[1],
+      sqrt(mean((clt_sample_points$min_n - predict(corrected_sample_skewness_model)^2)^2)),
+      coef(corrected_bootstrap_model)[2], coef(corrected_bootstrap_model)[1],
+      sqrt(mean((boot_sample_points$min_n - predict(corrected_bootstrap_model)^2)^2))
+    ),
+    x = "Expected Sample Skewness (S)",
+    y = "Minimum Sample Size (N)"
+  ) +
+  theme_bw() +
+  scale_color_manual(values = c("CLT (Sampling)" = "#1f77b4", "Bootstrap" = "#d62728")) +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    legend.title = element_blank(),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 11)
+  )
+
+ggsave(
+  filename = "Figures/clt_vs_bootstrap_sample_skewness.png",
+  width = 12,
+  height = 6.75,
+  dpi = poster_plot_dpi
+)
+
 cat("Analysis complete. Visualizations saved to Figures/ directory.\n")
