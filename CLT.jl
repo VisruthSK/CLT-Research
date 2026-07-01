@@ -300,6 +300,8 @@ end
 
 function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500])
     distributions = [
+        Gamma(16, 1),
+        LogNormal(0, 0.25),
         Gamma(4),
         LogNormal(0, 0.35),
         Gamma(2.56),
@@ -428,10 +430,10 @@ function gamma_graphing(r)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    # main(1_000_000; mode=:means)
+    main(1_000_000; mode=:means)
     # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
-    main(1_000_000; mode=:two_sample_t)
+    # main(1_000_000; mode=:two_sample_t)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
 end
