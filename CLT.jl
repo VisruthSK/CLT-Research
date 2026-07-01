@@ -299,36 +299,69 @@ function analyze_two_sample_t_statistics(r::Int, sample_sizes::Vector{Int}, rati
 end
 
 function analyze_bootstrap(r::Int, sample_sizes::Vector{Int}, distributions; r_boot::Int=5000)::DataFrame
-    println("Analyzing bootstrap skewness with $(r) repetitions and $(r_boot) bootstrap samples")
+    println("Analyzing bootstrap skewness and tails with $(r) repetitions and $(r_boot) bootstrap samples")
     results = DataFrame(
         "Distribution" => String[],
         "Sample Size" => Int64[],
         "Sampling Skewness" => Float64[],
-        "Bootstrap Skewness" => Float64[]
+        "Bootstrap Skewness" => Float64[],
+        "Sampling Lower Tail" => Float64[],
+        "Sampling Upper Tail" => Float64[],
+        "Bootstrap Lower Tail" => Float64[],
+        "Bootstrap Upper Tail" => Float64[]
     )
+
+    zstar = quantile(Normal(), 0.975)
 
     for d::Distribution in distributions
         println(string(d))
+        μ = mean(d)
+        σ = std(d)
         u = Threads.SpinLock()
         @inbounds Threads.@threads for n in sample_sizes
-            # 1. Compute sampling distribution skewness
+            # 1. Compute sampling distribution skewness and tails
             sampling_means, _ = sampling_distribution(mean, d, n, r)
             sampling_skewness = StatsBase.skewness(sampling_means)
+            
+            z_scores = zeros(r)
+            zscore!(z_scores, sampling_means, μ, σ / sqrt(n))
+            sampling_upper = sum(z_scores .>= zstar) / r
+            sampling_lower = sum(z_scores .<= -zstar) / r
 
-            # 2. Compute average bootstrap skewness over a subset of samples
-            n_samples = min(r, 200)
+            # 2. Compute average bootstrap skewness and tails over a subset of samples
+            n_samples = min(r, 500)
             bootstrap_skews = zeros(n_samples)
+            bootstrap_uppers = zeros(n_samples)
+            bootstrap_lowers = zeros(n_samples)
             
             for i in 1:n_samples
                 rng = MersenneTwister(i + n)
                 sample = rand(rng, d, n)
+                sample_mean = mean(sample)
+                sample_std = std(sample)
+                
                 bs = bootstrap(mean, sample, BasicSampling(r_boot))
-                bootstrap_skews[i] = StatsBase.skewness(bs.t1[1])
+                boot_means = bs.t1[1]
+                
+                # Standardize bootstrap means
+                boot_z = (boot_means .- sample_mean) ./ (sample_std / sqrt(n))
+                
+                bootstrap_skews[i] = StatsBase.skewness(boot_means)
+                bootstrap_uppers[i] = sum(boot_z .>= zstar) / r_boot
+                bootstrap_lowers[i] = sum(boot_z .<= -zstar) / r_boot
             end
-            bootstrap_skewness = mean(bootstrap_skews)
-
+            
             Threads.lock(u) do
-                push!(results, (string(d), n, sampling_skewness, bootstrap_skewness))
+                push!(results, (
+                    string(d), 
+                    n, 
+                    sampling_skewness, 
+                    mean(bootstrap_skews),
+                    sampling_lower,
+                    sampling_upper,
+                    mean(bootstrap_lowers),
+                    mean(bootstrap_uppers)
+                ))
             end
         end
     end
@@ -393,7 +426,7 @@ function main(r; mode::Symbol=:means, sample_sizes::Vector{Int}=[5, 10, 20, 30, 
     end
 
     if mode in (:bootstrap, :all)
-        bootstrap_summary = analyze_bootstrap(r, sample_sizes, distributions)
+        bootstrap_summary = analyze_bootstrap(r, sample_sizes, distributions; r_boot=1000)
         CSV.write("bootstrap_comparison.csv.gz", bootstrap_summary, compress=true)
     end
 
@@ -477,7 +510,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
     # main(1_000_000; mode=:two_sample_t)
-    main(10_000; mode=:bootstrap)
+    main(100_000; mode=:bootstrap)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
 end
