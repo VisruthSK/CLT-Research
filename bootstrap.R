@@ -114,4 +114,63 @@ save_as_image(
   res = poster_table_res
 )
 
+# ==============================================================================
+# COMBINED MODEL PLOT: CLT vs. Bootstrap
+# ==============================================================================
+clt_points <- sampling_nominal |>
+  select(Distribution, Skewness, N = Sampling_N) |>
+  mutate(Type = "CLT (Sampling)")
+
+boot_points <- df_nominal |>
+  select(Distribution, Skewness, N = `Sample Size`) |>
+  mutate(Type = "Bootstrap")
+
+combined_df <- bind_rows(clt_points, boot_points)
+
+model_clt <- lm(Skewness ~ sqrt(N), data = clt_points)
+model_boot <- lm(Skewness ~ sqrt(N), data = boot_points)
+
+# Write summary of models
+cat("\nCLT Model summary:\n")
+print(summary(model_clt))
+cat("\nBootstrap Model summary:\n")
+print(summary(model_boot))
+
+combined_df |>
+  ggplot(aes(x = sqrt(N), y = Skewness, color = Type, shape = Type)) +
+  geom_point(size = 3) +
+  geom_abline(
+    slope = coef(model_clt)[2], intercept = coef(model_clt)[1],
+    color = "#1f77b4", linetype = "dashed", linewidth = 1.2
+  ) +
+  geom_abline(
+    slope = coef(model_boot)[2], intercept = coef(model_boot)[1],
+    color = "#d62728", linetype = "dashed", linewidth = 1.2
+  ) +
+  labs(
+    title = "CLT Sampling vs. Bootstrap Tail Convergence Model",
+    subtitle = sprintf(
+      "CLT: Skewness = %.4f * sqrt(N) + %.4f (R² = %.3f)\nBootstrap: Skewness = %.4f * sqrt(N) + %.4f (R² = %.3f)",
+      coef(model_clt)[2], coef(model_clt)[1], summary(model_clt)$r.squared,
+      coef(model_boot)[2], coef(model_boot)[1], summary(model_boot)$r.squared
+    ),
+    x = "Square Root of Minimum Sample Size",
+    y = "Population Skewness"
+  ) +
+  theme_bw() +
+  scale_color_manual(values = c("CLT (Sampling)" = "#1f77b4", "Bootstrap" = "#d62728")) +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    legend.title = element_blank(),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 11)
+  )
+
+ggsave(
+  filename = "Figures/clt_vs_bootstrap_model.png",
+  width = 12,
+  height = 6.75,
+  dpi = poster_plot_dpi
+)
+
 cat("Analysis complete. Visualizations saved to Figures/ directory.\n")
