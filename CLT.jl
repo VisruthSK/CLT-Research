@@ -315,6 +315,7 @@ function analyze_bootstrap(r::Int, sample_sizes::Vector{Int}, distributions; r_b
 
     for d::Distribution in distributions
         println(string(d))
+        flush(stdout)
         μ = mean(d)
         σ = std(d)
         u = Threads.SpinLock()
@@ -329,7 +330,7 @@ function analyze_bootstrap(r::Int, sample_sizes::Vector{Int}, distributions; r_b
             sampling_lower = sum(z_scores .<= -zstar) / r
 
             # 2. Compute average bootstrap skewness and tails over a subset of samples
-            n_samples = min(r, 10000)
+            n_samples = min(r, 100_000)
             bootstrap_skews = zeros(n_samples)
             bootstrap_uppers = zeros(n_samples)
             bootstrap_lowers = zeros(n_samples)
@@ -510,7 +511,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # main(1_000_000; mode=:t, sample_sizes=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000])
     # main(1_000_000; mode=:difference_in_means)
     # main(1_000_000; mode=:two_sample_t)
-    main(100_000; mode=:bootstrap)
+    main(1_000_000; mode=:bootstrap)
     # graphing(1_000_000)
     # gamma_graphing(1_000_000)
 end
